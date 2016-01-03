@@ -1,0 +1,19 @@
+This file describes a bit about how the program works, and how the data
+structures are organized.
+
+
+The solver cares about points. Each point has coordinates, and the
+ObjectManager keeps track of what points we have.
+
+Next, we have "primitives". Each of these can be thought of as some object--
+a pad, a grid of pads, a through-hole, a constraint, etc. Primitives may
+have "children"--other primitives that are really part of it, and cannot
+exist independently (for example, the points making up a pad are children
+of it; if the pad is deleted, all of those points should be, too). Primitives
+may also have "dependencies", which are sort of the inverse: if one of a
+primitive's dependencies is deleted, that primitive should be deleted as well.
+For example, a constraint depends on any primitives it constrains.
+
+The simplest primitive is Point. This just wraps a point in the ObjectManager,
+and is the only primitive that needs to know about points at such a low level
+(all others can just have Point primitives as children).
