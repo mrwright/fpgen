@@ -1,11 +1,13 @@
+from __future__ import print_function
+
 import pygtk
 pygtk.require('2.0')
-import gtk, gobject, cairo
-from numpy.linalg import solve
+import gtk
 
 from object_manager import ObjectManager
-from primitives import (Pad, Horizontal, Vertical, Point, CenterPoint,
+from primitives import (Pad, Horizontal, Vertical, CenterPoint,
                         PadArray, HorizDistance, )
+
 
 class FPArea(gtk.DrawingArea):
     @classmethod
@@ -54,7 +56,7 @@ class FPArea(gtk.DrawingArea):
     def scroll_event(self, event):
         # When the scroll wheel is used, zoom in or out.
         x, y = self.coord_map(event.x, event.y)
-        print x, y
+        print(x, y)
         if event.direction == gtk.gdk.SCROLL_UP:
             self.scale_factor *= 1.3
         elif event.direction == gtk.gdk.SCROLL_DOWN:
@@ -62,7 +64,7 @@ class FPArea(gtk.DrawingArea):
         self.scale_x = event.x / self.scale_factor - x
         self.scale_y = event.y / self.scale_factor - y
 
-        print self.scale_factor, self.scale_x, self.scale_y
+        print(self.scale_factor, self.scale_x, self.scale_y)
         self.queue_draw()
 
     def recalculate(self):
@@ -96,7 +98,7 @@ class FPArea(gtk.DrawingArea):
                 break
         for p in to_remove:
             self.primitives.remove(p)
-            #TODO: these should be sets.
+            # TODO: these should be sets.
             if p in self.draw_primitives:
                 self.draw_primitives.remove(p)
 
@@ -111,7 +113,7 @@ class FPArea(gtk.DrawingArea):
             'd': HorizDistance,
         }
         keyname = gtk.gdk.keyval_name(event.keyval)
-        print keyname
+        print(keyname)
         if keyname == 'a':
             p = Pad(self.object_manager, self.x, self.y, 100, 50)
             self.object_manager.add_primitive(p)
@@ -121,7 +123,7 @@ class FPArea(gtk.DrawingArea):
             self.object_manager.add_primitive(p)
             self.recalculate()
         elif keyname == 'Delete':
-            print self.active_object
+            print(self.active_object)
             if self.active_object is not None:
                 self.delete(self.active_object)
             self.recalculate()
@@ -132,7 +134,7 @@ class FPArea(gtk.DrawingArea):
                 self.object_manager.add_primitive(p)
                 self.selected_primitives.clear()
             else:
-                print "Select two points."
+                print("Select two points.")
             self.recalculate()
         elif keyname == 'space':
             if self.active_object is not None:
@@ -152,7 +154,7 @@ class FPArea(gtk.DrawingArea):
                     self.object_manager.add_primitive(p)
                     self.deselect_all()
                 else:
-                    print "Cannot create constraint."
+                    print("Cannot create constraint.")
             self.recalculate()
         self.update_closest()
         self.queue_draw()
@@ -166,14 +168,14 @@ class FPArea(gtk.DrawingArea):
         return True
 
     def expose_event(self, event):
-        x , y, width, height = event.area
+        x, y, width, height = event.area
         self.window.draw_drawable(self.get_style().fg_gc[gtk.STATE_NORMAL],
                                   self.pixmap, x, y, x, y, width, height)
 
         cr = self.window.cairo_create()
-        #cr.rectangle(event.area.x, event.area.y,
-        #             event.area.width, event.area.height)
-        #cr.clip()
+        # cr.rectangle(event.area.x, event.area.y,
+        #              event.area.width, event.area.height)
+        # cr.clip()
         self.draw(cr)
         return False
 
@@ -189,7 +191,7 @@ class FPArea(gtk.DrawingArea):
         (p, dist) = self.object_manager.closest(self.x, self.y)
 
         if dist < 100:
-            if None is not self.active_object is not p:
+            if self.active_object is not None and p is not None:
                 self.active_object.deactivate()
             self.active_object = p
             if p is not None:
@@ -214,10 +216,10 @@ class FPArea(gtk.DrawingArea):
             self.update_closest()
         return
 
-        cr.restore()
-        cr.move_to(10,10)
-        cr.show_text("(%s, %s)" % (x, y))
-        cr.stroke()
+        # cr.restore()
+        # cr.move_to(10, 10)
+        # cr.show_text("(%s, %s)" % (x, y))
+        # cr.stroke()
 
     def draw_pixmap(self, width, height):
         rect = (int(self.x-5), int(self.y-5), 10, 10)
@@ -233,7 +235,7 @@ class FPArea(gtk.DrawingArea):
         else:
             x = event.x
             y = event.y
-            state = event.state
+            # state = event.state
 
         orig_x, orig_y = self.x, self.y
         self.x, self.y = self.coord_map(x, y)
@@ -249,12 +251,12 @@ class FPArea(gtk.DrawingArea):
     def click_event(self, event):
         x, y = self.coord_map(event.x, event.y)
 
-        print event.button
+        print(event.button)
 
-        print "Click %s %s" % (x, y)
+        print("Click %s %s" % (x, y))
         if event.button == 1:
             if self.active_object is not None:
-                print "Start drag"
+                print("Start drag")
                 self.dragging_object = self.active_object
                 self.dragging_object.drag(0, 0)
                 self.recalculate()
@@ -266,12 +268,13 @@ class FPArea(gtk.DrawingArea):
         return True
 
     def release_event(self, event):
-        print event
+        print(event)
         if event.button == 1:
-            print "Relase drag"
+            print("Relase drag")
             self.dragging_object = None
         elif event.button == 2:
             self.dragging = False
+
 
 def create_menus():
     accel_group = gtk.AccelGroup()
@@ -290,6 +293,7 @@ def create_menus():
 
     return menu_bar
 
+
 def run():
     window = gtk.Window()
     window.set_geometry_hints(min_width=600, min_height=600)
@@ -298,7 +302,7 @@ def run():
     widget.set_flags(gtk.CAN_FOCUS)
     vbox = gtk.VBox(False)
     menu = create_menus()
-    #vbox.add(menu)
+    # vbox.add(menu)
     vbox.pack_start(menu, False, True, 0)
     vbox.add(widget)
     vbox.show()
@@ -308,4 +312,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-

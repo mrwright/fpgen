@@ -1,6 +1,7 @@
 import pygtk
 pygtk.require('2.0')
-import gtk, gobject, cairo
+import gtk
+
 
 class Primitive(object):
     def __init__(self, object_manager):
@@ -94,6 +95,7 @@ class Primitive(object):
         '''
         pass
 
+
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
@@ -139,8 +141,9 @@ class Point(Primitive):
         self._object_manager.set_point_coords(self.point(), x, y)
 
     def delete(self):
-        #TODO: remove our point from all structures.
+        # TODO: remove our point from all structures.
         pass
+
 
 class CenterPoint(Point):
     def __init__(self, object_manager, objects):
@@ -163,6 +166,7 @@ class CenterPoint(Point):
 
     def drag(self, offs_x, offs_y):
         pass
+
 
 class Pad(Primitive):
     def __init__(self, object_manager, x, y, w, h):
@@ -231,8 +235,7 @@ class Pad(Primitive):
         return (horiz_constraints +
                 vert_constraints +
                 eq_horiz_constraints +
-                eq_vert_constraints
-        )
+                eq_vert_constraints)
 
     def draw(self, cr):
         if self.selected():
@@ -255,6 +258,7 @@ class Pad(Primitive):
         for point in self.points:
             point.drag(offs_x, offs_y)
 
+
 class TwoPointConstraint(Primitive):
     '''
     Base class for any constraint between two points.
@@ -273,6 +277,7 @@ class TwoPointConstraint(Primitive):
     @classmethod
     def can_create(cls, objects):
         return len(objects) == 2 and all(isinstance(o, Point) for o in objects)
+
 
 class Horizontal(TwoPointConstraint):
     def constraints(self):
@@ -311,6 +316,7 @@ class Horizontal(TwoPointConstraint):
         cr.line_to(self.p2.x(), self.p2.y())
         cr.stroke()
 
+
 class Vertical(TwoPointConstraint):
     def constraints(self):
         return [
@@ -343,6 +349,7 @@ class Vertical(TwoPointConstraint):
         cr.line_to(self.p2.x(), self.p2.y())
         cr.stroke()
 
+
 class HorizDistance(TwoPointConstraint):
     def __init__(self, object_manager, objects):
         super(HorizDistance, self).__init__(object_manager, objects)
@@ -359,7 +366,7 @@ class HorizDistance(TwoPointConstraint):
         entry1.show()
         array.show()
         dialog.get_content_area().add(array)
-        #widget.connect("clicked", lambda x: win2.destroy())
+        # widget.connect("clicked", lambda x: win2.destroy())
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
         result = dialog.run()
@@ -405,6 +412,7 @@ class HorizDistance(TwoPointConstraint):
     def drag(self, offs_x, offs_y):
         self.label_distance += offs_y
 
+
 class PadArray(Primitive):
     def __init__(self, object_manager, x, y):
         super(PadArray, self).__init__(object_manager)
@@ -425,7 +433,7 @@ class PadArray(Primitive):
         entry2.show()
         array.show()
         dialog.get_content_area().add(array)
-        #widget.connect("clicked", lambda x: win2.destroy())
+        # widget.connect("clicked", lambda x: win2.destroy())
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
         result = dialog.run()
@@ -471,7 +479,7 @@ class PadArray(Primitive):
                     (
                         [(self.p(i, j).p(1, 1), 1, 0),
                          (self.p(i, j + 1).p(1, 1), -1, 0),
-                     ], 0),
+                         ], 0),
                 )
 
         for i in range(0, self.x - 1):
@@ -480,7 +488,7 @@ class PadArray(Primitive):
                     (
                         [(self.p(i, j).p(1, 1), 0, 1),
                          (self.p(i + 1, j).p(1, 1), 0, -1),
-                     ], 0),
+                         ], 0),
                 )
 
         # Same distance
@@ -491,7 +499,7 @@ class PadArray(Primitive):
                         [(self.p(i, j).p(1, 1), 0, 1),
                          (self.p(i, j + 1).p(1, 1), 0, -2),
                          (self.p(i, j + 2).p(1, 1), 0, 1),
-                     ], 0),
+                         ], 0),
                 )
 
         for i in range(0, self.x - 2):
@@ -501,7 +509,7 @@ class PadArray(Primitive):
                         [(self.p(i, j).p(1, 1), 1, 0),
                          (self.p(i + 1, j).p(1, 1), -2, 0),
                          (self.p(i + 2, j).p(1, 1), 1, 0),
-                     ], 0),
+                         ], 0),
                 )
 
         # Same size
@@ -515,7 +523,7 @@ class PadArray(Primitive):
                          (self.p(0, 0).p(0, 0), -1, 0),
                          (self.p(i, j).p(1, 0), -1, 0),
                          (self.p(i, j).p(0, 0), 1, 0),
-                     ], 0),
+                         ], 0),
                 )
                 all_constraints.append(
                     (
@@ -523,7 +531,7 @@ class PadArray(Primitive):
                          (self.p(0, 0).p(0, 0), 0, -1),
                          (self.p(i, j).p(0, 1), 0, -1),
                          (self.p(i, j).p(0, 0), 0, 1),
-                     ], 0),
+                         ], 0),
                 )
 
         return all_constraints
