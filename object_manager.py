@@ -3,10 +3,10 @@
 # Eventually, the core solver should be moved to a new file.
 # Actually, the solver should be entirely rewritten.
 
-from collections import defaultdict
 from math import sqrt
 from numpy import array, dot, vdot, matrix
-from numpy.linalg import matrix_rank, solve, inv
+from numpy.linalg import inv
+
 
 class ObjectManager(object):
     def __init__(self):
@@ -77,7 +77,7 @@ class ObjectManager(object):
         for i in range(len(self._point_lru)):
             if self._point_lru[i] == p:
                 self._point_lru = ([p] + self._point_lru[0:i]
-                                      + self._point_lru[i+1:])
+                                   + self._point_lru[i+1:])
                 break
 
     def set_point_coords(self, point, x, y):
@@ -115,7 +115,6 @@ class ObjectManager(object):
         return new_matrix
 
     def can_add(self, ortho_m, idx):
-        r = ortho_m[0]
         new_row = sum(om[idx] * matrix(om) for om in ortho_m)
         for i, j in enumerate(new_row.tolist()[0]):
             if i == idx and round(j, 5) != 1:
@@ -196,4 +195,3 @@ class ObjectManager(object):
         sol = zip(sol[::2], sol[1::2])
         for point, mat_point in self._cached_point_to_matrix.iteritems():
             self._point_coords[point] = sol[mat_point]
-
