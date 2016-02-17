@@ -293,21 +293,39 @@ def create_menus():
 
     return menu_bar
 
+def create_button_bar(fparea):
+    vbox = gtk.VBox(False)
+    table = gtk.Table(8, 2, True)
+    vbox.pack_start(table, False, False, 0)
+    button = gtk.Button("Pad")
+    button.connect("pressed", lambda e: print("Pressed"))
+    button.unset_flags(gtk.CAN_FOCUS)
+    button.show()
+    table.attach(button, 0, 1, 0, 1, xoptions=gtk.EXPAND)
+    table.show()
+    vbox.show()
+    return vbox
 
 def run():
     window = gtk.Window()
     window.set_geometry_hints(min_width=600, min_height=600)
     window.connect("delete-event", gtk.main_quit)
-    widget = FPArea.new()
-    widget.set_flags(gtk.CAN_FOCUS)
+    fparea = FPArea.new()
+    fparea.set_flags(gtk.CAN_FOCUS)
     vbox = gtk.VBox(False)
     menu = create_menus()
-    # vbox.add(menu)
     vbox.pack_start(menu, False, True, 0)
-    vbox.add(widget)
+    hbox = gtk.HBox(False)
+    vbox.add(hbox)
+    buttonbar = create_button_bar(fparea)
+    hbox.pack_start(buttonbar, False, True, 0)
+    hbox.add(fparea)
+    hbox.show()
     vbox.show()
     window.add(vbox)
     window.present()
+    window.connect('key-press-event', lambda e, f: print(e, f))
+    print(window.focus_widget)
     gtk.main()
 
 if __name__ == "__main__":
