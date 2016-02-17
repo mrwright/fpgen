@@ -3,9 +3,10 @@
 # Eventually, the core solver should be moved to a new file.
 # Actually, the solver should be entirely rewritten.
 
+from collections import defaultdict
 from math import sqrt
 from numpy import array, dot, vdot, matrix
-from numpy.linalg import inv
+from numpy.linalg import inv, matrix_rank
 
 
 class ObjectManager(object):
@@ -94,75 +95,108 @@ class ObjectManager(object):
     def point_coords(self, point):
         return (self.point_x(point), self.point_y(point))
 
-    # TODO: most stuff below here is absolutely terrible and inefficient
-    # and should be rewritten.
+    def eliminate(self, current, new, mins):
+        '''
+        Gaussian elimination.
 
-    def add_ortho_row(self, ortho_m, new_row):
-        cur_row = matrix(new_row)
+        current: list of maps from column indices to coefficients.
+        new: a constraint to be added.
+        mins: dictionary of index->row index.
+        '''
+        remaining = list(new)
+        while remaining:
+            # TODO: this could be done a lot better.
+            x = remaining.pop()
+            if x in mins:
+                i = mins[x]
+                factor = new[x]
+                for y, v in current[i].iteritems():
+                    new[y] -= v * factor
+                    if new[y]:
+                        remaining.append(y)
+        for x in list(new):
+            if new[x] == 0:
+                del new[x]
 
-        for other_row in ortho_m:
-            dot_prod = vdot(new_row, other_row)
-            cur_row = cur_row - dot_prod * matrix(other_row)
-        magnitude = sqrt(vdot(cur_row.tolist(), cur_row.tolist()))
-        cur_row = cur_row / magnitude
-        ortho_m.append(cur_row.tolist()[0])
+        try:
+            j = min(new)
+            assert j not in mins, new
+        except ValueError:
+            # Row is all zeros.
+            return False
 
-    def build_ortho(self, m):
-        m = matrix(m)
-        new_matrix = []
-        for row in m:
-            self.add_ortho_row(new_matrix, row)
-        return new_matrix
+        v = new[j]
+        for x in new:
+            new[x] /= float(v)
 
-    def can_add(self, ortho_m, idx):
-        new_row = sum(om[idx] * matrix(om) for om in ortho_m)
-        for i, j in enumerate(new_row.tolist()[0]):
-            if i == idx and round(j, 5) != 1:
-                return True
-            if i != idx and round(j, 5) != 0:
-                return True
-        return False
+        assert new[j] == 1
+
+        for row in current:
+            if j in row:
+                factor = row[j]
+                for y, v in new.iteritems():
+                    row[y] -= v * factor
+                assert row[j] == 0
+                for i in list(row):
+                    if row[i] == 0:
+                        del row[i]
+
+        mins[j] = len(current)
+        current.append(new)
+
+        return True
 
     def build_matrix(self, constraints, point_to_matrix):
         n = len(self._all_points)
         targets = []
         matrix = []
 
+        current_dictmat = []
+        current_mins = {}
+
+        # TODO: don't bother building the matrix. We can invert it ourselves,
+        # and the matrix multiplication will probably be faster when it's represented
+        # sparsely.
         for (coeffs, target) in constraints:
             row = [0] * 2 * n
+            rowdict = defaultdict(int)
             for (pt, coeffx, coeffy) in coeffs:
                 row[2 * point_to_matrix[pt]] = coeffx
+                rowdict[2 * point_to_matrix[pt]] = coeffx
                 row[2 * point_to_matrix[pt] + 1] = coeffy
+                rowdict[2 * point_to_matrix[pt] + 1] = coeffy
+            result = self.eliminate(current_dictmat, rowdict, current_mins)
+            assert result
             matrix.append(row)
             targets.append(target)
-
-        ortho_matrix = self.build_ortho(matrix)
+        # We now have a matrix with all explicit constraints.
 
         self._target_map_x = {}
         self._target_map_y = {}
         for pt in self._point_lru:
             coords = self._point_coords[pt]
             row1 = [0] * 2 * n
+            row1dict = defaultdict(int)
             row2 = [0] * 2 * n
+            row2dict = defaultdict(int)
             row1[2 * point_to_matrix[pt]] = 1
+            row1dict[2 * point_to_matrix[pt]] = 1
             row2[2 * point_to_matrix[pt] + 1] = 1
+            row2dict[2 * point_to_matrix[pt] + 1] = 1
 
-            if self.can_add(ortho_matrix, 2 * point_to_matrix[pt]):
+            if self.eliminate(current_dictmat, row1dict, current_mins):
                 self._target_map_x[pt] = len(targets)
                 targets.append(coords[0])
                 matrix.append(row1)
-                self.add_ortho_row(ortho_matrix, row1)
 
-            if self.can_add(ortho_matrix, 2 * point_to_matrix[pt] + 1):
+            if self.eliminate(current_dictmat, row2dict, current_mins):
                 self._target_map_y[pt] = len(targets)
                 targets.append(coords[1])
                 matrix.append(row2)
-                self.add_ortho_row(ortho_matrix, row2)
 
             if len(matrix) == 2 * n:
                 break
 
-        # TODO: optimize this
         return (array(matrix), array(targets))
 
     def update_points(self):
