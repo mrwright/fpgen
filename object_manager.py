@@ -36,6 +36,8 @@ class ObjectManager(object):
         self.primitives = []
         # All primitives that should be drawn on the screen.
         self.draw_primitives = []
+        # All primitives whose constraints we should consider.
+        self.constraining_primitives = []
 
     def closest(self, x, y):
         '''
@@ -50,10 +52,19 @@ class ObjectManager(object):
                 p = primitive
         return (p, dist)
 
-    def add_primitive(self, primitive, draw=True):
+    def add_primitive(self, primitive, draw=True, constraining=True):
         self.primitives.append(primitive)
         if draw:
             self.draw_primitives.append(primitive)
+        if constraining:
+            self.constraining_primitives.append(primitive)
+        if not self.update_points():
+            print "OVERCONSTRAINED"
+            self.primitives.pop()
+            if draw:
+                self.draw_primitives.pop()
+            if constraining:
+                self.constraining_primitives.pop()
 
     def point_dist(self, p1, p2):
         dx = p1[0] - p2[0]
@@ -166,7 +177,8 @@ class ObjectManager(object):
                 row[2 * point_to_matrix[pt] + 1] = coeffy
                 rowdict[2 * point_to_matrix[pt] + 1] = coeffy
             result = self.eliminate(current_dictmat, rowdict, current_mins)
-            assert result
+            if not result:
+                return False
             matrix.append(row)
             targets.append(target)
         # We now have a matrix with all explicit constraints.
@@ -201,7 +213,7 @@ class ObjectManager(object):
 
     def update_points(self):
         constraints = []
-        for p in self.primitives:
+        for p in self.constraining_primitives:
             constraints = constraints + p.constraints()
 
         point_to_matrix = {}
@@ -210,7 +222,10 @@ class ObjectManager(object):
             point_to_matrix[point] = idx
             idx += 1
         assert idx == len(self._all_points)
-        m, t = self.build_matrix(constraints, point_to_matrix)
+        result = self.build_matrix(constraints, point_to_matrix)
+        if not result:
+            return False
+        m, t = result
         self._cached_matrix = inv(m)
         self._cached_target = t
         self._cached_point_to_matrix = point_to_matrix
@@ -218,6 +233,7 @@ class ObjectManager(object):
         sol = zip(sol[::2], sol[1::2])
         for point, mat_point in point_to_matrix.iteritems():
             self._point_coords[point] = sol[mat_point]
+        return True
 
     def _update_point(self, p, x, y):
         if p in self._target_map_x:

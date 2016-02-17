@@ -453,6 +453,7 @@ class PadArray(Primitive):
                         10, 10)
 
                 self.pads.append(p)
+                object_manager.add_primitive(p, constraining=False)
 
     def dependencies(self):
         return self.pads
@@ -537,7 +538,12 @@ class PadArray(Primitive):
         return all_constraints
 
     def dist(self, p):
-        return min(child.dist(p) for child in self.children())
+        return None
+        dists = [child.dist(p) for child in self.children()]
+        if any(dist for dist in dists if dist != None):
+            return min(dist for dist in dists if dist != None)
+        else:
+            return None
 
     def drag(self, offs_x, offs_y):
         for child in self.children():
