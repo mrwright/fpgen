@@ -74,7 +74,7 @@ class FPArea(gtk.DrawingArea):
         self.selected_primitives.clear()
 
     def delete(self, obj):
-        for p in self.primitives:
+        for p in self.object_manager.primitives:
             if obj in p.children():
                 # We're a child primitive which must only be deleted through
                 # the parent.
@@ -88,7 +88,7 @@ class FPArea(gtk.DrawingArea):
                 new_to_remove.update(c.children())
             to_remove.update(new_to_remove)
             changed = changed or l != len(to_remove)
-            for p in self.primitives:
+            for p in self.object_manager.primitives:
                 if p in to_remove:
                     continue
                 if to_remove.intersection(p.dependencies()):
@@ -97,10 +97,10 @@ class FPArea(gtk.DrawingArea):
             if not changed:
                 break
         for p in to_remove:
-            self.primitives.remove(p)
+            self.object_manager.primitives.remove(p)
             # TODO: these should be sets.
-            if p in self.draw_primitives:
-                self.draw_primitives.remove(p)
+            if p in self.object_manager.draw_primitives:
+                self.object_manager.draw_primitives.remove(p)
 
     def key_press_event(self, event):
         # TODO: refactor this so it's not some monolithic function
