@@ -6,7 +6,7 @@ import gtk
 
 from object_manager import ObjectManager
 from primitives import (Pad, Horizontal, Vertical, CenterPoint,
-                        PadArray, HorizDistance, )
+                        Array, HorizDistance, Ball)
 
 
 class FPArea(gtk.DrawingArea):
@@ -115,11 +115,13 @@ class FPArea(gtk.DrawingArea):
         keyname = gtk.gdk.keyval_name(event.keyval)
         print(keyname)
         if keyname == 'a':
-            p = Pad(self.object_manager, self.x, self.y, 100, 50)
+            #p = Pad(self.object_manager, self.x, self.y, 100, 50)
+            p = Ball(self.object_manager, self.x, self.y, 100)
             self.object_manager.add_primitive(p)
             self.recalculate()
         elif keyname == 'p':
-            p = PadArray(self.object_manager, self.x, self.y)
+            p = Array(self.object_manager, self.x, self.y,
+                      lambda om, x, y: Ball(om, x, y, 10))
             self.object_manager.add_primitive(p)
             self.recalculate()
         elif keyname == 'Delete':

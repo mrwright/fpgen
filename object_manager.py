@@ -52,13 +52,14 @@ class ObjectManager(object):
                 p = primitive
         return (p, dist)
 
-    def add_primitive(self, primitive, draw=True, constraining=True):
+    def add_primitive(self, primitive, draw=True, constraining=True,
+                      check_overconstraints=True):
         self.primitives.append(primitive)
         if draw:
             self.draw_primitives.append(primitive)
         if constraining:
             self.constraining_primitives.append(primitive)
-        if not self.update_points():
+        if check_overconstraints and not self.update_points():
             print "OVERCONSTRAINED"
             self.primitives.pop()
             if draw:

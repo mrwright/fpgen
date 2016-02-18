@@ -1,6 +1,7 @@
 import pygtk
 pygtk.require('2.0')
 import gtk
+import math
 
 
 class Primitive(object):
@@ -167,8 +168,14 @@ class CenterPoint(Point):
     def drag(self, offs_x, offs_y):
         pass
 
+class TileablePrimitive(Primitive):
+    def dimensions_to_constrain(self):
+        return []
 
-class Pad(Primitive):
+    def center_point(self):
+        return None
+
+class Pad(TileablePrimitive):
     def __init__(self, object_manager, x, y, w, h):
         # Pads consist of 9 points, evenly spaced in a 3x3 grid.
         super(Pad, self).__init__(object_manager)
@@ -185,7 +192,8 @@ class Pad(Primitive):
         self.w = w
         self.h = h
         for point in self.points:
-            self._object_manager.add_primitive(point, draw=False)
+            self._object_manager.add_primitive(point, draw=False,
+                                               check_overconstraints=False)
 
     def children(self):
         return self.points
@@ -257,6 +265,116 @@ class Pad(Primitive):
     def drag(self, offs_x, offs_y):
         for point in self.points:
             point.drag(offs_x, offs_y)
+
+    def dimensions_to_constrain(self, multiplier=1):
+        # When in an array, we want the height and width of all pads to be equal.
+        return [[(self.p(0, 0), multiplier, 0),
+                 (self.p(2, 0), -multiplier, 0)],
+                [(self.p(0, 0), 0, multiplier),
+                 (self.p(0, 2), 0, -multiplier)]]
+
+    def center_point(self):
+        return self.p(1, 1)
+
+class Ball(TileablePrimitive):
+    def __init__(self, object_manager, x, y, r):
+        # Five points: the center point, and four at the compass points around it.
+        super(Ball, self).__init__(object_manager)
+        self.points = [
+            Point(object_manager, x, y - r/2),
+            Point(object_manager, x - r/2, y),
+            Point(object_manager, x, y),
+            Point(object_manager, x + r/2, y),
+            Point(object_manager, x, y + r/2),
+        ]
+        self.x = x
+        self.y = y
+        self.r = r
+        for point in self.points:
+            self._object_manager.add_primitive(point, draw=False,
+                                               check_overconstraints=False)
+
+    def children(self):
+        return self.points
+
+    def p(self, x):
+        return self.points[x].point()
+
+    def dist(self, p):
+        # We consider the distance to us to be 10 to anywhere inside us,
+        # and infinite to anywhere else.
+        x, y = p[0], p[1]
+        cx, cy = self.points[2].x(), self.points[2].y()
+        r = self.points[3].x() - self.points[2].x()
+        if (x - cx) * (x - cx) + (y - cy) * (y - cy) < r * r:
+            return 10
+        else:
+            return None
+
+    def constraints(self):
+        # Points in a row should be aligned horizontally; points in a column
+        # vertically.
+        horiz_constraints = [
+            ([(self.p(1), 0, 1), (self.p(2), 0, -1)], 0),
+            ([(self.p(1), 0, 1), (self.p(3), 0, -1)], 0)
+        ]
+        vert_constraints = [
+            ([(self.p(0), 1, 0), (self.p(2), -1, 0)], 0),
+            ([(self.p(0), 1, 0), (self.p(4), -1, 0)], 0)
+        ]
+        # Spacing should be equal, in the horizontal and vertical directions.
+        eq_horiz_constraints = [
+            ([(self.p(1), 1, 0),
+              (self.p(2), -2, 0),
+              (self.p(3), 1, 0)], 0)
+        ]
+        eq_vert_constraints = [
+            ([(self.p(0), 0, 1),
+              (self.p(2), 0, -2),
+              (self.p(4), 0, 1)], 0)
+        ]
+        # Finally, the radius is the same in any direction.
+        eq_constraints = [
+            ([(self.p(2), -1, 1),
+              (self.p(3), 1, 0),
+              (self.p(4), 0, -1),
+            ], 0)
+        ]
+        return (horiz_constraints +
+                vert_constraints +
+                eq_horiz_constraints +
+                eq_vert_constraints +
+                eq_constraints)
+
+    def draw(self, cr):
+        if self.selected():
+            cr.set_source_rgb(0, 0, 0.7)
+        elif self.active():
+            cr.set_source_rgb(0.7, 0, 0)
+        else:
+            cr.set_source_rgb(0.7, 0.7, 0.7)
+        cr.arc(self.points[2].x(),
+               self.points[2].y(),
+               self.points[3].x() - self.points[2].x(),
+               0, 2 * math.pi
+        )
+        cr.fill()
+        cr.save()
+        for child in self.children():
+            child.draw(cr)
+        cr.restore()
+
+    def drag(self, offs_x, offs_y):
+        for point in self.points:
+            point.drag(offs_x, offs_y)
+
+    def dimensions_to_constrain(self, multiplier=1):
+        # When in an array, we want the height and width of all pads to be equal.
+        return [[(self.p(3), multiplier, 0),
+                 (self.p(2), -multiplier, 0)]]
+
+    def center_point(self):
+        return self.p(2)
 
 
 class TwoPointConstraint(Primitive):
@@ -413,60 +531,65 @@ class HorizDistance(TwoPointConstraint):
         self.label_distance += offs_y
 
 
-class PadArray(Primitive):
-    def __init__(self, object_manager, x, y):
-        super(PadArray, self).__init__(object_manager)
+class Array(Primitive):
+    def __init__(self, object_manager, x, y, constructor,
+                 nx=None, ny=None):
+        super(Array, self).__init__(object_manager)
 
-        dialog = gtk.Dialog("Enter dimensions")
-        array = gtk.Table(2, 2)
-        label1 = gtk.Label("# of pads (x): ")
-        array.attach(label1, 0, 1, 0, 1)
-        entry1 = gtk.Entry()
-        array.attach(entry1, 1, 2, 0, 1)
-        label1.show()
-        entry1.show()
-        label2 = gtk.Label("# of pads (y): ")
-        array.attach(label2, 0, 1, 1, 2)
-        entry2 = gtk.Entry()
-        array.attach(entry2, 1, 2, 1, 2)
-        label2.show()
-        entry2.show()
-        array.show()
-        dialog.get_content_area().add(array)
-        # widget.connect("clicked", lambda x: win2.destroy())
-        dialog.add_button("Ok", 1)
-        dialog.add_button("Cancel", 2)
-        result = dialog.run()
-        if result == 1:
-            self.x = int(entry1.get_text())
-            self.y = int(entry2.get_text())
+        if nx == None:
+            dialog = gtk.Dialog("Enter dimensions")
+            array = gtk.Table(2, 2)
+            label1 = gtk.Label("# of pads (x): ")
+            array.attach(label1, 0, 1, 0, 1)
+            entry1 = gtk.Entry()
+            array.attach(entry1, 1, 2, 0, 1)
+            label1.show()
+            entry1.show()
+            label2 = gtk.Label("# of pads (y): ")
+            array.attach(label2, 0, 1, 1, 2)
+            entry2 = gtk.Entry()
+            array.attach(entry2, 1, 2, 1, 2)
+            label2.show()
+            entry2.show()
+            array.show()
+            dialog.get_content_area().add(array)
+            # widget.connect("clicked", lambda x: win2.destroy())
+            dialog.add_button("Ok", 1)
+            dialog.add_button("Cancel", 2)
+            result = dialog.run()
+            if result == 1:
+                self.x = int(entry1.get_text())
+                self.y = int(entry2.get_text())
+            else:
+                del self
+            dialog.destroy()
         else:
-            del self
-        dialog.destroy()
+            self.x = nx
+            self.y = ny
 
-        self.pads = []
+        self.elements = []
         for i in range(self.x):
             for j in range(self.y):
-                p = Pad(object_manager,
-                        x + (i - self.x/2) * 30,
-                        y + (j - self.y/2) * 30,
-                        10, 10)
+                p = constructor(object_manager,
+                                x + (i - self.x/2) * 30,
+                                y + (j - self.y/2) * 30)
 
-                self.pads.append(p)
-                object_manager.add_primitive(p, constraining=False)
+                self.elements.append(p)
+                object_manager.add_primitive(p, constraining=False,
+                                             check_overconstraints=False)
 
     def dependencies(self):
-        return self.pads
+        return self.elements
 
     def children(self):
-        return self.pads
+        return self.elements
 
     def draw(self, cr):
         for child in self.children():
             child.draw(cr)
 
     def p(self, i, j):
-        return self.pads[j + self.y * i]
+        return self.elements[j + self.y * i]
 
     def constraints(self):
         all_constraints = []
@@ -478,8 +601,8 @@ class PadArray(Primitive):
             for j in range(0, self.y - 1):
                 all_constraints.append(
                     (
-                        [(self.p(i, j).p(1, 1), 1, 0),
-                         (self.p(i, j + 1).p(1, 1), -1, 0),
+                        [(self.p(i, j).center_point(), 1, 0),
+                         (self.p(i, j + 1).center_point(), -1, 0),
                          ], 0),
                 )
 
@@ -487,8 +610,8 @@ class PadArray(Primitive):
             for j in range(0, min(self.y, 2)):
                 all_constraints.append(
                     (
-                        [(self.p(i, j).p(1, 1), 0, 1),
-                         (self.p(i + 1, j).p(1, 1), 0, -1),
+                        [(self.p(i, j).center_point(), 0, 1),
+                         (self.p(i + 1, j).center_point(), 0, -1),
                          ], 0),
                 )
 
@@ -497,9 +620,9 @@ class PadArray(Primitive):
             for j in range(0, self.y - 2):
                 all_constraints.append(
                     (
-                        [(self.p(i, j).p(1, 1), 0, 1),
-                         (self.p(i, j + 1).p(1, 1), 0, -2),
-                         (self.p(i, j + 2).p(1, 1), 0, 1),
+                        [(self.p(i, j).center_point(), 0, 1),
+                         (self.p(i, j + 1).center_point(), 0, -2),
+                         (self.p(i, j + 2).center_point(), 0, 1),
                          ], 0),
                 )
 
@@ -507,33 +630,23 @@ class PadArray(Primitive):
             for j in range(0, self.y):
                 all_constraints.append(
                     (
-                        [(self.p(i, j).p(1, 1), 1, 0),
-                         (self.p(i + 1, j).p(1, 1), -2, 0),
-                         (self.p(i + 2, j).p(1, 1), 1, 0),
+                        [(self.p(i, j).center_point(), 1, 0),
+                         (self.p(i + 1, j).center_point(), -2, 0),
+                         (self.p(i + 2, j).center_point(), 1, 0),
                          ], 0),
                 )
 
         # Same size
+        p0_dimensions = self.p(0, 0).dimensions_to_constrain()
         for i in range(0, self.x):
             for j in range(0, self.y):
                 if i == j == 0:
                     continue
-                all_constraints.append(
-                    (
-                        [(self.p(0, 0).p(1, 0), 1, 0),
-                         (self.p(0, 0).p(0, 0), -1, 0),
-                         (self.p(i, j).p(1, 0), -1, 0),
-                         (self.p(i, j).p(0, 0), 1, 0),
-                         ], 0),
-                )
-                all_constraints.append(
-                    (
-                        [(self.p(0, 0).p(0, 1), 0, 1),
-                         (self.p(0, 0).p(0, 0), 0, -1),
-                         (self.p(i, j).p(0, 1), 0, -1),
-                         (self.p(i, j).p(0, 0), 0, 1),
-                         ], 0),
-                )
+                dims = self.p(i, j).dimensions_to_constrain(multiplier=-1)
+                for (p0dims, pdims) in zip(p0_dimensions, dims):
+                    all_constraints.append(
+                        (p0dims + pdims, 0),
+                    )
 
         return all_constraints
 
