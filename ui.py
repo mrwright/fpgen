@@ -71,9 +71,12 @@ class FPArea(gtk.DrawingArea):
         self.object_manager.update_points()
 
     def deselect_all(self):
+        for primitive in self.selected_primitives:
+            primitive.deselect()
         self.selected_primitives.clear()
 
     def delete(self, obj):
+        # TODO: this really should be a method of the object manager.
         for p in self.object_manager.primitives:
             if obj in p.children():
                 # We're a child primitive which must only be deleted through
@@ -101,6 +104,10 @@ class FPArea(gtk.DrawingArea):
             # TODO: these should be sets.
             if p in self.object_manager.draw_primitives:
                 self.object_manager.draw_primitives.remove(p)
+            if p in self.object_manager.constraining_primitives:
+                self.object_manager.constraining_primitives.remove(p)
+
+        self.recalculate()
 
     def key_press_event(self, event):
         # TODO: refactor this so it's not some monolithic function
