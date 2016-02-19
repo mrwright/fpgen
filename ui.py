@@ -6,7 +6,7 @@ import gtk
 
 from object_manager import ObjectManager
 from primitives import (Pad, Horizontal, Vertical, CenterPoint,
-                        Array, HorizDistance, Ball)
+                        Array, HorizDistance, VertDistance, Ball)
 from geda_out import GedaOut
 
 
@@ -46,11 +46,13 @@ class FPArea(gtk.DrawingArea):
         self.active_object = None
         self.dragging_object = None
         self.selected_primitives = set()
+        self.buttons = {}
 
         # Create the center point
         p = CenterPoint(self.object_manager, set())
         self.object_manager.add_primitive(p)
         self.deselect_all()
+
 
         return self
 
@@ -123,13 +125,15 @@ class FPArea(gtk.DrawingArea):
         keyname = gtk.gdk.keyval_name(event.keyval)
         print(keyname)
         if keyname == 'a':
-            p = Pad(self.object_manager, self.x, self.y, 100, 50)
+            p = Pad(self.object_manager, self.x, self.y, 100, 50, None)
             #p = Ball(self.object_manager, self.x, self.y, 100)
             self.object_manager.add_primitive(p)
             self.recalculate()
         elif keyname == 'p':
             p = Array(self.object_manager, self.x, self.y,
-                      lambda om, x, y: Ball(om, x, y, 10))
+                      #lambda om, x, y: Ball(om, x, y, 10)
+                      lambda om, x, y: Pad(om, x, y, 100, 50, None)
+            )
             self.object_manager.add_primitive(p)
             self.recalculate()
         elif keyname == 'Delete':
@@ -154,6 +158,7 @@ class FPArea(gtk.DrawingArea):
                 else:
                     self.selected_primitives.add(self.active_object)
                     self.active_object.select()
+                self.update_buttons()
         elif keyname == 'q':
             exit()
         elif keyname == 'w':
@@ -162,12 +167,31 @@ class FPArea(gtk.DrawingArea):
             cls = primitive_table.get(keyname)
             if cls:
                 if cls.can_create(self.selected_primitives):
-                    p = cls(self.object_manager, self.selected_primitives)
-                    self.object_manager.add_primitive(p)
-                    self.deselect_all()
+                    configuration = cls.configure()
+                    if configuration:
+                        p = cls(self.object_manager, self.selected_primitives,
+                                configuration)
+                        self.object_manager.add_primitive(p)
+                        self.deselect_all()
                 else:
                     print("Cannot create constraint.")
             self.recalculate()
+        self.update_closest()
+        self.queue_draw()
+
+    def add_new(self, primitive_type):
+        if primitive_type.can_create(self.selected_primitives):
+            configuration = primitive_type.configure()
+            if configuration != False:
+                p = primitive_type(self.object_manager, self.selected_primitives,
+                                   configuration)
+                # TODO: this should really be added as part of the constructor, or
+                # all adding should happen here.
+                self.object_manager.add_primitive(p)
+                self.deselect_all()
+        else:
+            print("Cannot create constraint.")
+        self.recalculate()
         self.update_closest()
         self.queue_draw()
 
@@ -287,6 +311,12 @@ class FPArea(gtk.DrawingArea):
         elif event.button == 2:
             self.dragging = False
 
+    def update_buttons(self):
+        for button, buttoncls in self.buttons.iteritems():
+            if buttoncls.can_create(self.selected_primitives):
+                button.set_sensitive(True)
+            else:
+                button.set_sensitive(False)
 
 def create_menus():
     accel_group = gtk.AccelGroup()
@@ -305,15 +335,28 @@ def create_menus():
 
     return menu_bar
 
+buttons = [
+    ("Horiz", Horizontal),
+    ("Vert", Vertical),
+    ("HDist", HorizDistance),
+    ("VDist", VertDistance),
+    ("Ball", Ball),
+    ("Pad", Pad)
+]
+
 def create_button_bar(fparea):
     vbox = gtk.VBox(False)
-    table = gtk.Table(8, 2, True)
+    table = gtk.Table(8, 1, True)
     vbox.pack_start(table, False, False, 0)
-    button = gtk.Button("Pad")
-    button.connect("pressed", lambda e: print("Pressed"))
-    button.unset_flags(gtk.CAN_FOCUS)
-    button.show()
-    table.attach(button, 0, 1, 0, 1, xoptions=gtk.EXPAND)
+    for idx, (btext, bcons) in enumerate(buttons):
+        button = gtk.Button(btext)
+        print(btext, bcons)
+        button.connect("pressed", lambda e, bcons=bcons: fparea.add_new(bcons))
+        button.unset_flags(gtk.CAN_FOCUS)
+        button.show()
+        table.attach(button, 0, 1, idx, idx + 1)
+        fparea.buttons[button] = bcons
+    fparea.update_buttons()
     table.show()
     vbox.show()
     return vbox

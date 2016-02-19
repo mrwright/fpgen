@@ -96,6 +96,17 @@ class Primitive(object):
         '''
         pass
 
+    @classmethod
+    def configure(cls):
+        return None
+
+    @classmethod
+    def placeable(cls):
+        return False
+
+    @classmethod
+    def can_create(cls, objects):
+        return False
 
 class Point(Primitive):
     '''
@@ -178,7 +189,7 @@ class TileablePrimitive(Primitive):
         return None
 
 class Pad(TileablePrimitive):
-    def __init__(self, object_manager, x, y, w, h):
+    def __init__(self, object_manager, x, y, w, h, configuration):
         # Pads consist of 9 points, evenly spaced in a 3x3 grid.
         super(Pad, self).__init__(object_manager)
         self.points = []
@@ -192,6 +203,18 @@ class Pad(TileablePrimitive):
         for point in self.points:
             self._object_manager.add_primitive(point, draw=False,
                                                check_overconstraints=False)
+
+    @classmethod
+    def configure(cls):
+        return None
+
+    @classmethod
+    def placeable(cls):
+        return True
+
+    @classmethod
+    def can_create(cls, objects):
+        return not objects
 
     def children(self):
         return self.points
@@ -292,7 +315,7 @@ class Pad(TileablePrimitive):
         return self.p(1, 1)
 
 class Ball(TileablePrimitive):
-    def __init__(self, object_manager, x, y, r):
+    def __init__(self, object_manager, x, y, r, configuration):
         # Five points: the center point, and four at the compass points around it.
         super(Ball, self).__init__(object_manager)
         self.points = [
@@ -305,6 +328,18 @@ class Ball(TileablePrimitive):
         for point in self.points:
             self._object_manager.add_primitive(point, draw=False,
                                                check_overconstraints=False)
+
+    @classmethod
+    def configure(cls):
+        return None
+
+    @classmethod
+    def placeable(cls):
+        return True
+
+    @classmethod
+    def can_create(cls, objects):
+        return not objects
 
     @property
     def x(self):
@@ -416,8 +451,18 @@ class TwoPointConstraint(Primitive):
     def can_create(cls, objects):
         return len(objects) == 2 and all(isinstance(o, Point) for o in objects)
 
+    @classmethod
+    def placeable(cls):
+        return False
+
+    @classmethod
+    def configure(cls):
+        return None
 
 class Horizontal(TwoPointConstraint):
+    def __init__(self, object_manager, objects, configuration):
+        super(Horizontal, self).__init__(object_manager, objects)
+
     def constraints(self):
         return [
             ([(self.p1.point(), 0, 1), (self.p2.point(), 0, -1)], 0)
@@ -456,6 +501,9 @@ class Horizontal(TwoPointConstraint):
 
 
 class Vertical(TwoPointConstraint):
+    def __init__(self, object_manager, objects, configuration):
+        super(Vertical, self).__init__(object_manager, objects)
+
     def constraints(self):
         return [
             ([(self.p1.point(), 1, 0), (self.p2.point(), -1, 0)], 0)
@@ -487,14 +535,22 @@ class Vertical(TwoPointConstraint):
         cr.line_to(self.p2.x, self.p2.y)
         cr.stroke()
 
-
-class HorizDistance(TwoPointConstraint):
-    def __init__(self, object_manager, objects):
-        super(HorizDistance, self).__init__(object_manager, objects)
+class DistanceConstraint(TwoPointConstraint):
+    def __init__(self, object_manager, objects, configuration):
+        super(DistanceConstraint, self).__init__(object_manager, objects)
         if self.p1.x > self.p2.x:
             self.p1, self.p2 = self.p2, self.p1
 
-        dialog = gtk.Dialog("Enter distance")
+        self.distance = configuration
+
+        self.label_distance = 100
+
+    @classmethod
+    def configure(cls):
+        if cls.horiz:
+            dialog = gtk.Dialog("Horizontal distance")
+        else:
+            dialog = gtk.Dialog("Vertical distance")
         array = gtk.Table(1, 2)
         label1 = gtk.Label("Distance: ")
         array.attach(label1, 0, 1, 0, 1)
@@ -509,17 +565,22 @@ class HorizDistance(TwoPointConstraint):
         dialog.add_button("Cancel", 2)
         result = dialog.run()
         if result == 1:
-            self.distance = float(entry1.get_text())
+            result = float(entry1.get_text())
         else:
-            del self
+            result = False
         dialog.destroy()
 
-        self.label_distance = 100
+        return result
 
     def constraints(self):
-        return [
-            ([(self.p2.point(), 1, 0), (self.p1.point(), -1, 0)], self.distance)
-        ]
+        if self.horiz:
+            return [
+                ([(self.p2.point(), 1, 0), (self.p1.point(), -1, 0)], self.distance)
+            ]
+        else:
+            return [
+                ([(self.p2.point(), 0, 1), (self.p1.point(), 0, -1)], self.distance)
+            ]
 
     def draw(self, cr):
         if self.selected():
@@ -530,26 +591,50 @@ class HorizDistance(TwoPointConstraint):
             cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(0.3)
         cr.move_to(self.p1.x, self.p1.y)
-        cr.line_to(self.p1.x, self.p1.y + self.label_distance)
+        if self.horiz:
+            cr.line_to(self.p1.x, self.p1.y + self.label_distance)
+        else:
+            cr.line_to(self.p1.x + self.label_distance, self.p1.y)
         cr.stroke()
         cr.move_to(self.p2.x, self.p2.y)
-        # Note: the p1 here is not a bug.
-        cr.line_to(self.p2.x, self.p1.y + self.label_distance)
+        if self.horiz:
+            # Note: the p1 here is not a bug.
+            cr.line_to(self.p2.x, self.p1.y + self.label_distance)
+        else:
+            cr.line_to(self.p1.x + self.label_distance, self.p2.y)
         cr.stroke()
-        cr.move_to(self.p1.x, self.p1.y + self.label_distance)
+        if self.horiz:
+            cr.move_to(self.p1.x, self.p1.y + self.label_distance)
+        else:
+            cr.move_to(self.p1.x + self.label_distance, self.p2.y)
         cr.show_text("%s" % (self.distance,))
         cr.stroke()
 
     def dist(self, p):
-        return self._object_manager.point_dist(
-            p,
-            (self.p1.x,
-             self.p1.y + self.label_distance)
-        )
+        if self.horiz:
+            return self._object_manager.point_dist(
+                p,
+                (self.p1.x,
+                 self.p1.y + self.label_distance)
+            )
+        else:
+            return self._object_manager.point_dist(
+                p,
+                (self.p1.x + self.label_distance,
+                 self.p2.y)
+            )
 
     def drag(self, offs_x, offs_y):
-        self.label_distance += offs_y
+        if self.horiz:
+            self.label_distance += offs_y
+        else:
+            self.label_distance += offs_x
 
+class HorizDistance(DistanceConstraint):
+    horiz = True
+
+class VertDistance(DistanceConstraint):
+    horiz = False
 
 class Array(Primitive):
     def __init__(self, object_manager, x, y, constructor,
