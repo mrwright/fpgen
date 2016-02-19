@@ -201,19 +201,19 @@ class Pad(TileablePrimitive):
 
     @property
     def x0(self):
-        return self.p(0, 0).x
-
-    @property
-    def y0(self):
-        return self.p(0, 0).y
+        return min(self.points[0].x, self.points[8].x)
 
     @property
     def x1(self):
-        return self.p(2, 2).x
+        return max(self.points[0].x, self.points[8].x)
+
+    @property
+    def y0(self):
+        return min(self.points[0].y, self.points[8].y)
 
     @property
     def y1(self):
-        return self.p(2, 2).y
+        return max(self.points[0].y, self.points[8].y)
 
     @property
     def w(self):
@@ -229,11 +229,7 @@ class Pad(TileablePrimitive):
         # when the mouse is actually on the pad, but that individual points
         # in us can still be active, too.
         x, y = p[0], p[1]
-        x0 = min(self.x0, self.x1)
-        x1 = max(self.x0, self.x1)
-        y0 = min(self.y0, self.y1)
-        y1 = max(self.y0, self.y1)
-        if x > x0 and x < x1 and y > y0 and y < y1:
+        if x > self.x0 and x < self.x1 and y > self.y0 and y < self.y1:
             return 10
         else:
             return None

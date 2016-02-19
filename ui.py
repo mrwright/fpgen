@@ -7,6 +7,7 @@ import gtk
 from object_manager import ObjectManager
 from primitives import (Pad, Horizontal, Vertical, CenterPoint,
                         Array, HorizDistance, Ball)
+from geda_out import GedaOut
 
 
 class FPArea(gtk.DrawingArea):
@@ -122,8 +123,8 @@ class FPArea(gtk.DrawingArea):
         keyname = gtk.gdk.keyval_name(event.keyval)
         print(keyname)
         if keyname == 'a':
-            #p = Pad(self.object_manager, self.x, self.y, 100, 50)
-            p = Ball(self.object_manager, self.x, self.y, 100)
+            p = Pad(self.object_manager, self.x, self.y, 100, 50)
+            #p = Ball(self.object_manager, self.x, self.y, 100)
             self.object_manager.add_primitive(p)
             self.recalculate()
         elif keyname == 'p':
@@ -155,6 +156,8 @@ class FPArea(gtk.DrawingArea):
                     self.active_object.select()
         elif keyname == 'q':
             exit()
+        elif keyname == 'w':
+            GedaOut.write(self.object_manager.primitives)
         else:
             cls = primitive_table.get(keyname)
             if cls:
