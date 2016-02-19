@@ -105,9 +105,11 @@ class Point(Primitive):
         super(Point, self).__init__(object_manager)
         self.p = object_manager.alloc_point(x, y)
 
+    @property
     def x(self):
         return self._object_manager.point_x(self.p)
 
+    @property
     def y(self):
         return self._object_manager.point_y(self.p)
 
@@ -118,13 +120,13 @@ class Point(Primitive):
         return self.p
 
     def dist(self, p):
-        return self._object_manager.point_dist((self.x(), self.y()), p)
+        return self._object_manager.point_dist((self.x, self.y), p)
 
     def draw(self, cr):
         if self.active():
             cr.set_source_rgb(1, 0, 0)
 
-            cr.arc(self.x(), self.y(), 2, 0, 6.2)
+            cr.arc(self.x, self.y, 2, 0, 6.2)
             cr.fill()
 
         if self.selected():
@@ -187,10 +189,6 @@ class Pad(TileablePrimitive):
                           x + (i - 1) * w/2,
                           y + (j - 1) * h/2)
                 )
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
         for point in self.points:
             self._object_manager.add_primitive(point, draw=False,
                                                check_overconstraints=False)
@@ -201,16 +199,40 @@ class Pad(TileablePrimitive):
     def p(self, x, y):
         return self.points[x + 3 * y].point()
 
+    @property
+    def x0(self):
+        return self.p(0, 0).x
+
+    @property
+    def y0(self):
+        return self.p(0, 0).y
+
+    @property
+    def x1(self):
+        return self.p(2, 2).x
+
+    @property
+    def y1(self):
+        return self.p(2, 2).y
+
+    @property
+    def w(self):
+        return self.x1 - self.x0
+
+    @property
+    def h(self):
+        return self.y1 - self.y0
+
     def dist(self, p):
         # We consider the distance to us to be 10 to anywhere inside us,
         # and infinite to anywhere else. This ensures we'll only be active
         # when the mouse is actually on the pad, but that individual points
         # in us can still be active, too.
         x, y = p[0], p[1]
-        x0 = min(self.points[0].x(), self.points[8].x())
-        x1 = max(self.points[0].x(), self.points[8].x())
-        y0 = min(self.points[0].y(), self.points[8].y())
-        y1 = max(self.points[0].y(), self.points[8].y())
+        x0 = min(self.x0, self.x1)
+        x1 = max(self.x0, self.x1)
+        y0 = min(self.y0, self.y1)
+        y1 = max(self.y0, self.y1)
         if x > x0 and x < x1 and y > y0 and y < y1:
             return 10
         else:
@@ -252,10 +274,7 @@ class Pad(TileablePrimitive):
             cr.set_source_rgb(0.7, 0, 0)
         else:
             cr.set_source_rgb(0.7, 0.7, 0.7)
-        cr.rectangle(self.points[0].x(),
-                     self.points[0].y(),
-                     self.points[8].x() - self.points[0].x(),
-                     self.points[8].y() - self.points[0].y())
+        cr.rectangle(self.x0, self.y0, self.w, self.h)
         cr.fill()
         cr.save()
         for child in self.children():
@@ -287,12 +306,21 @@ class Ball(TileablePrimitive):
             Point(object_manager, x + r/2, y),
             Point(object_manager, x, y + r/2),
         ]
-        self.x = x
-        self.y = y
-        self.r = r
         for point in self.points:
             self._object_manager.add_primitive(point, draw=False,
                                                check_overconstraints=False)
+
+    @property
+    def x(self):
+        return self.points[2].x
+
+    @property
+    def y(self):
+        return self.points[2].y
+
+    @property
+    def r(self):
+        return self.points[3].x - self.points[2].x
 
     def children(self):
         return self.points
@@ -304,8 +332,8 @@ class Ball(TileablePrimitive):
         # We consider the distance to us to be 10 to anywhere inside us,
         # and infinite to anywhere else.
         x, y = p[0], p[1]
-        cx, cy = self.points[2].x(), self.points[2].y()
-        r = self.points[3].x() - self.points[2].x()
+        cx, cy = self.x, self.y
+        r = self.r
         if (x - cx) * (x - cx) + (y - cy) * (y - cy) < r * r:
             return 10
         else:
@@ -353,11 +381,7 @@ class Ball(TileablePrimitive):
             cr.set_source_rgb(0.7, 0, 0)
         else:
             cr.set_source_rgb(0.7, 0.7, 0.7)
-        cr.arc(self.points[2].x(),
-               self.points[2].y(),
-               self.points[3].x() - self.points[2].x(),
-               0, 2 * math.pi
-        )
+        cr.arc(self.x, self.y, self.r, 0, 2 * math.pi)
         cr.fill()
         cr.save()
         for child in self.children():
@@ -405,24 +429,24 @@ class Horizontal(TwoPointConstraint):
 
     def dist(self, p):
         x, y = p[0], p[1]
-        if self.p1.x() < self.p2.x():
+        if self.p1.x < self.p2.x:
             p1, p2 = self.p1, self.p2
         else:
             p1, p2 = self.p2, self.p1
-        if x < p1.x():
-            return 10 + self._object_manager.point_dist(p, (p1.x(), p1.y()))
-        elif x > p2.x():
-            return 10 + self._object_manager.point_dist(p, (p2.x(), p2.y()))
+        if x < p1.x:
+            return 10 + self._object_manager.point_dist(p, (p1.x, p1.y))
+        elif x > p2.x:
+            return 10 + self._object_manager.point_dist(p, (p2.x, p2.y))
         else:
-            return 10 + (y - p1.y()) * (y - p1.y())
+            return 10 + (y - p1.y) * (y - p1.y)
 
     def draw(self, cr):
         if self.selected():
             cr.set_source_rgb(0.4, 0.4, 1)
             cr.set_line_width(0.5)
             cr.set_dash([2, 2], 2)
-            cr.move_to(self.p1.x(), self.p1.y())
-            cr.line_to(self.p2.x(), self.p2.y())
+            cr.move_to(self.p1.x, self.p1.y)
+            cr.line_to(self.p2.x, self.p2.y)
             cr.stroke()
         if self.active():
             cr.set_source_rgb(1, 0, 0)
@@ -430,8 +454,8 @@ class Horizontal(TwoPointConstraint):
             cr.set_source_rgb(0, 1, 0)
         cr.set_line_width(0.5)
         cr.set_dash([2, 2])
-        cr.move_to(self.p1.x(), self.p1.y())
-        cr.line_to(self.p2.x(), self.p2.y())
+        cr.move_to(self.p1.x, self.p1.y)
+        cr.line_to(self.p2.x, self.p2.y)
         cr.stroke()
 
 
@@ -443,16 +467,16 @@ class Vertical(TwoPointConstraint):
 
     def dist(self, p):
         x, y = p[0], p[1]
-        if self.p1.y() < self.p2.y():
+        if self.p1.y < self.p2.y:
             p1, p2 = self.p1, self.p2
         else:
             p1, p2 = self.p2, self.p1
-        if y < p1.y():
-            return 10 + self._object_manager.point_dist(p, (p1.x(), p1.y()))
-        elif y > p2.y():
-            return 10 + self._object_manager.point_dist(p, (p2.x(), p2.y()))
+        if y < p1.y:
+            return 10 + self._object_manager.point_dist(p, (p1.x, p1.y))
+        elif y > p2.y:
+            return 10 + self._object_manager.point_dist(p, (p2.x, p2.y))
         else:
-            return 10 + (x - p1.x()) * (x - p1.x())
+            return 10 + (x - p1.x) * (x - p1.x)
 
     def draw(self, cr):
         if self.selected():
@@ -463,15 +487,15 @@ class Vertical(TwoPointConstraint):
             cr.set_source_rgb(0, 1, 0)
         cr.set_line_width(0.5)
         cr.set_dash([5, 5])
-        cr.move_to(self.p1.x(), self.p1.y())
-        cr.line_to(self.p2.x(), self.p2.y())
+        cr.move_to(self.p1.x, self.p1.y)
+        cr.line_to(self.p2.x, self.p2.y)
         cr.stroke()
 
 
 class HorizDistance(TwoPointConstraint):
     def __init__(self, object_manager, objects):
         super(HorizDistance, self).__init__(object_manager, objects)
-        if self.p1.x() > self.p2.x():
+        if self.p1.x > self.p2.x:
             self.p1, self.p2 = self.p2, self.p1
 
         dialog = gtk.Dialog("Enter distance")
@@ -509,22 +533,22 @@ class HorizDistance(TwoPointConstraint):
         else:
             cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(0.3)
-        cr.move_to(self.p1.x(), self.p1.y())
-        cr.line_to(self.p1.x(), self.p1.y() + self.label_distance)
+        cr.move_to(self.p1.x, self.p1.y)
+        cr.line_to(self.p1.x, self.p1.y + self.label_distance)
         cr.stroke()
-        cr.move_to(self.p2.x(), self.p2.y())
+        cr.move_to(self.p2.x, self.p2.y)
         # Note: the p1 here is not a bug.
-        cr.line_to(self.p2.x(), self.p1.y() + self.label_distance)
+        cr.line_to(self.p2.x, self.p1.y + self.label_distance)
         cr.stroke()
-        cr.move_to(self.p1.x(), self.p1.y() + self.label_distance)
+        cr.move_to(self.p1.x, self.p1.y + self.label_distance)
         cr.show_text("%s" % (self.distance,))
         cr.stroke()
 
     def dist(self, p):
         return self._object_manager.point_dist(
             p,
-            (self.p1.x(),
-             self.p1.y() + self.label_distance)
+            (self.p1.x,
+             self.p1.y + self.label_distance)
         )
 
     def drag(self, offs_x, offs_y):
