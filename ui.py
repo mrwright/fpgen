@@ -3,6 +3,7 @@ from __future__ import print_function
 import pygtk
 pygtk.require('2.0')
 import gtk
+import json
 
 from object_manager import ObjectManager
 from primitives import (Pad, Horizontal, Vertical, CenterPoint,
@@ -165,15 +166,27 @@ class FPArea(gtk.DrawingArea):
         elif keyname == 'w':
             GedaOut.write(self.object_manager.primitives)
         elif keyname == 's':
-            import json
-            print(json.dumps(self.object_manager.to_dict()))
+            d = self.object_manager.to_dict()
+            with open("save.fpg", "w") as f:
+                f.write(json.dumps(d))
+        elif keyname == 'l':
+            with open("save.fpg") as f:
+                contents = f.read()
+                d = json.loads(contents)
+            new_object_manager = ObjectManager.from_dict(d)
+            self.object_manager = new_object_manager
+            self.selected_primitives.clear()
+            self.update_buttons()
+            self.update_closest()
+            self.queue_draw()
         else:
             cls = primitive_table.get(keyname)
             if cls:
                 if cls.can_create(self.selected_primitives):
-                    configuration = cls.configure()
+                    configuration = cls.configure(self.selected_primitives)
                     if configuration:
-                        p = cls.new(self.object_manager, self.selected_primitives,
+                        p = cls.new(self.object_manager,
+                                    0, 0,
                                     configuration)
                         self.object_manager.add_primitive(p)
                         self.deselect_all()

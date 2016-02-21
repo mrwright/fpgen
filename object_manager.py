@@ -8,6 +8,8 @@ from math import sqrt
 from numpy import array, dot, vdot, matrix
 from numpy.linalg import inv, matrix_rank
 
+from primitives import PRIMITIVE_TYPES
+
 
 class ObjectManager(object):
     def __init__(self):
@@ -40,16 +42,61 @@ class ObjectManager(object):
         self.constraining_primitives = []
 
     def to_dict(self):
+        # Note: a lot of stuff here could be made more efficient, but there's
+        # not really any point.
         primitive_dicts = [dict(
+            index=idx,
             primitive_type=primitive.TYPE,
             primitive_dict=primitive.to_dict()
-        ) for primitive in self.primitives]
+        ) for idx, primitive in enumerate(self.primitives)]
         return dict(
             next_point_idx=self._next_point_idx,
             all_points=list(self._all_points),
             point_coords=self._point_coords,
             primitives=primitive_dicts,
+            draw_primitives=[self.primitive_idx(primitive)
+                             for primitive in self.draw_primitives],
+            constraining_primitives=[self.primitive_idx(primitive)
+                                     for primitive in self.constraining_primitives]
         )
+
+    @staticmethod
+    def from_dict(dictionary):
+        object_manager = ObjectManager()
+        object_manager._all_points = set(dictionary['all_points'])
+        object_manager._point_lru = dictionary['all_points']
+        object_manager._next_point_idx = dictionary['next_point_idx']
+        object_manager._point_coords = {
+            int(point): tuple(pc)
+            for point, pc in dictionary['point_coords'].iteritems()
+        }
+
+        # Create the actual primitives. This requires a topological sort, which
+        # can be done more efficiently than this but there's no good reason to.
+        primitive_dicts = dictionary['primitives']
+        object_manager.primitives = [None] * len(primitive_dicts)
+        while not all(primitive for primitive in object_manager.primitives):
+            for primitive_dict in primitive_dicts:
+                if not all(object_manager.primitives[i]
+                           for i in primitive_dict.get('deps', [])):
+                    continue
+                # At this point, we have a primitive that's ready to be created.
+                primitive_cls = PRIMITIVE_TYPES[primitive_dict['primitive_type']]
+                primitive = primitive_cls.from_dict(
+                    object_manager,
+                    primitive_dict['primitive_dict']
+                )
+                object_manager.primitives[primitive_dict['index']] = primitive
+        object_manager.draw_primitives = [
+            object_manager.primitives[idx] for idx in dictionary['draw_primitives']
+        ]
+        object_manager.constraining_primitives = [
+            object_manager.primitives[idx]
+            for idx in dictionary['constraining_primitives']
+        ]
+        object_manager.update_points()
+
+        return object_manager
 
     def primitive_idx(self, primitive):
         for i, this_primitive in enumerate(self.primitives):

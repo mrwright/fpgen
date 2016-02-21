@@ -17,6 +17,13 @@ class Primitive(object):
         '''
         pass
 
+    def to_dict(self):
+        return {}
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        raise NotImplementedError()
+
     def dependencies(self):
         '''
         All primitives we depend on. They might be able to exist independently
@@ -115,9 +122,6 @@ class Primitive(object):
     def can_create(cls, objects):
         return False
 
-    def to_dict(self):
-        return {}
-
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
@@ -179,6 +183,11 @@ class Point(Primitive):
         return dict(
             point_idx=self.p
         )
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        return cls(object_manager,
+                   dictionary['point_idx'])
 
 class CenterPoint(Point):
     TYPE = 2
@@ -360,6 +369,11 @@ class Pad(TileablePrimitive):
             deps=point_indices,
         )
 
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        return cls(object_manager,
+                   [object_manager.primitives[idx] for idx in dictionary['points']])
+
 class Ball(TileablePrimitive):
     TYPE = 4
 
@@ -493,6 +507,10 @@ class Ball(TileablePrimitive):
             deps=point_indices,
         )
 
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        return cls(object_manager,
+                   [object_manager.primitives[idx] for idx in dictionary['points']])
 
 class TwoPointConstraint(Primitive):
     '''
@@ -536,6 +554,11 @@ class TwoPointConstraint(Primitive):
             points=point_indices,
             deps=point_indices,
         )
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        return cls(object_manager,
+                   [object_manager.primitives[idx] for idx in dictionary['points']])
 
 class Horizontal(TwoPointConstraint):
     TYPE = 5
@@ -618,14 +641,23 @@ class Vertical(TwoPointConstraint):
         cr.stroke()
 
 class DistanceConstraint(TwoPointConstraint):
-    def __init__(self, object_manager, objects, configuration):
-        super(DistanceConstraint, self).__init__(object_manager, objects)
-        if self.p1.x > self.p2.x:
-            self.p1, self.p2 = self.p2, self.p1
+    def __init__(self, object_manager, p1, p2, dist, label_dist):
+        super(DistanceConstraint, self).__init__(object_manager, [p1, p2])
 
-        self.distance = configuration
+        self.p1 = p1
+        self.p2 = p2
+        self.distance = dist
 
-        self.label_distance = 100
+        self.label_distance = label_dist
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        p1 = configuration['p1']
+        p2 = configuration['p2']
+        dist = configuration['dist']
+        if p1.x > p2.x:
+            p1, p2 = p2, p1
+        return cls(object_manager, p1, p2, dist, 100)
 
     @classmethod
     def configure(cls, objects):
@@ -651,8 +683,13 @@ class DistanceConstraint(TwoPointConstraint):
         else:
             result = False
         dialog.destroy()
+        obj_list = list(objects)
 
-        return result
+        return dict(
+            dist=result,
+            p1=obj_list[0],
+            p2=obj_list[1],
+        )
 
     def constraints(self):
         if self.horiz:
@@ -719,6 +756,13 @@ class DistanceConstraint(TwoPointConstraint):
             label_distance=self.label_distance
         ))
         return dictionary
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        p1, p2 = tuple([object_manager.primitives[idx] for idx in dictionary['points']])
+        return cls(object_manager,
+                   p1, p2, dictionary['distance'], dictionary['label_distance']
+        )
 
 class HorizDistance(DistanceConstraint):
     TYPE = 7
@@ -887,7 +931,19 @@ class Array(Primitive):
         return dict(
             children=child_indices,
             deps=child_indices,
+            nx=self.nx,
+            ny=self.ny,
         )
+    #object_manager, elements, nx, ny
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        return cls(
+            object_manager,
+            [object_manager.primitives[child] for child in dictionary['children']],
+            dictionary['nx'],
+            dictionary['ny'],
+        )
+
 
 PRIMITIVE_TYPES = [
     None,
