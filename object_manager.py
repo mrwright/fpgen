@@ -39,6 +39,24 @@ class ObjectManager(object):
         # All primitives whose constraints we should consider.
         self.constraining_primitives = []
 
+    def to_dict(self):
+        primitive_dicts = [dict(
+            primitive_type=primitive.TYPE,
+            primitive_dict=primitive.to_dict()
+        ) for primitive in self.primitives]
+        return dict(
+            next_point_idx=self._next_point_idx,
+            all_points=list(self._all_points),
+            point_coords=self._point_coords,
+            primitives=primitive_dicts,
+        )
+
+    def primitive_idx(self, primitive):
+        for i, this_primitive in enumerate(self.primitives):
+            if primitive == this_primitive:
+                return i
+        return None
+
     def closest(self, x, y):
         '''
         Determine the primitive "closest" to the given coordinates.

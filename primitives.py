@@ -10,6 +10,13 @@ class Primitive(object):
         self._selected = False
         self._object_manager = object_manager
 
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        '''
+        Construct this primitive.
+        '''
+        pass
+
     def dependencies(self):
         '''
         All primitives we depend on. They might be able to exist independently
@@ -97,7 +104,7 @@ class Primitive(object):
         pass
 
     @classmethod
-    def configure(cls):
+    def configure(cls, objects):
         return None
 
     @classmethod
@@ -108,13 +115,23 @@ class Primitive(object):
     def can_create(cls, objects):
         return False
 
+    def to_dict(self):
+        return {}
+
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
     '''
-    def __init__(self, object_manager, x, y):
+    TYPE = 1
+
+    def __init__(self, object_manager, point):
         super(Point, self).__init__(object_manager)
-        self.p = object_manager.alloc_point(x, y)
+        self.p = point
+
+    @classmethod
+    def new(cls, object_manager, x, y):
+        point = object_manager.alloc_point(x, y)
+        return cls(object_manager, point)
 
     @property
     def x(self):
@@ -158,11 +175,21 @@ class Point(Primitive):
         # TODO: remove our point from all structures.
         pass
 
+    def to_dict(self):
+        return dict(
+            point_idx=self.p
+        )
 
 class CenterPoint(Point):
-    def __init__(self, object_manager, objects):
-        assert self.can_create(objects)
-        super(CenterPoint, self).__init__(object_manager, 0, 0)
+    TYPE = 2
+
+    def __init__(self, object_manager, point):
+        super(CenterPoint, self).__init__(object_manager, point)
+
+    @classmethod
+    def new(cls, object_manager):
+        point = object_manager.alloc_point(0, 0)
+        return cls(object_manager, point)
 
     @classmethod
     def can_create(cls, objects):
@@ -189,24 +216,34 @@ class TileablePrimitive(Primitive):
         return None
 
 class Pad(TileablePrimitive):
-    def __init__(self, object_manager, x, y, w, h, configuration):
-        # Pads consist of 9 points, evenly spaced in a 3x3 grid.
+    TYPE = 3
+
+    def __init__(self, object_manager, points):
         super(Pad, self).__init__(object_manager)
-        self.points = []
-        for j in range(3):
-            for i in range(3):
-                self.points.append(
-                    Point(object_manager,
-                          x + (i - 1) * w/2,
-                          y + (j - 1) * h/2)
-                )
-        for point in self.points:
-            self._object_manager.add_primitive(point, draw=False,
-                                               check_overconstraints=False)
+        self.points = points
 
     @classmethod
-    def configure(cls):
-        return None
+    def new(cls, object_manager, x, y, configuration):
+        w = configuration['w']
+        h = configuration['h']
+        # Pads consist of 9 points, evenly spaced in a 3x3 grid.
+        points = []
+        for j in range(3):
+            for i in range(3):
+                points.append(
+                    Point.new(object_manager,
+                              x + (i - 1) * w/2,
+                              y + (j - 1) * h/2)
+                )
+        for point in points:
+            object_manager.add_primitive(point, draw=False,
+                                         check_overconstraints=False)
+        return cls(object_manager, points)
+
+    @classmethod
+    def configure(cls, objects, w=100, h=100):
+        # TODO: configuration dialog?
+        return dict(w=w, h=h)
 
     @classmethod
     def placeable(cls):
@@ -314,23 +351,39 @@ class Pad(TileablePrimitive):
     def center_point(self):
         return self.p(1, 1)
 
+    def to_dict(self):
+        point_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in self.points]
+        return dict(
+            points=point_indices,
+            deps=point_indices,
+        )
+
 class Ball(TileablePrimitive):
-    def __init__(self, object_manager, x, y, r, configuration):
-        # Five points: the center point, and four at the compass points around it.
+    TYPE = 4
+
+    def __init__(self, object_manager, points):
         super(Ball, self).__init__(object_manager)
-        self.points = [
+        self.points = points
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        # Five points: the center point, and four at the compass points around it.
+        points = [
             Point(object_manager, x, y - r/2),
             Point(object_manager, x - r/2, y),
             Point(object_manager, x, y),
             Point(object_manager, x + r/2, y),
             Point(object_manager, x, y + r/2),
         ]
-        for point in self.points:
-            self._object_manager.add_primitive(point, draw=False,
-                                               check_overconstraints=False)
+        for point in points:
+            object_manager.add_primitive(point, draw=False,
+                                         check_overconstraints=False)
+        return cls(object_manager, points)
 
     @classmethod
-    def configure(cls):
+    def configure(cls, objects):
         return None
 
     @classmethod
@@ -431,6 +484,15 @@ class Ball(TileablePrimitive):
     def center_point(self):
         return self.p(2)
 
+    def to_dict(self):
+        point_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in self.points]
+        return dict(
+            points=point_indices,
+            deps=point_indices,
+        )
+
 
 class TwoPointConstraint(Primitive):
     '''
@@ -444,8 +506,16 @@ class TwoPointConstraint(Primitive):
         self.p1 = p1
         self.p2 = p2
 
-    def dependencies(self):
-        return [self.p1, self.p2]
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        objects = configuration['objects']
+        return cls(object_manager, objects)
+
+    @classmethod
+    def configure(cls, objects):
+        return dict(
+            objects=objects
+        )
 
     @classmethod
     def can_create(cls, objects):
@@ -455,12 +525,22 @@ class TwoPointConstraint(Primitive):
     def placeable(cls):
         return False
 
-    @classmethod
-    def configure(cls):
-        return None
+    def dependencies(self):
+        return [self.p1, self.p2]
+
+    def to_dict(self):
+        point_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in (self.p1, self.p2)]
+        return dict(
+            points=point_indices,
+            deps=point_indices,
+        )
 
 class Horizontal(TwoPointConstraint):
-    def __init__(self, object_manager, objects, configuration):
+    TYPE = 5
+
+    def __init__(self, object_manager, objects):
         super(Horizontal, self).__init__(object_manager, objects)
 
     def constraints(self):
@@ -501,7 +581,9 @@ class Horizontal(TwoPointConstraint):
 
 
 class Vertical(TwoPointConstraint):
-    def __init__(self, object_manager, objects, configuration):
+    TYPE = 6
+
+    def __init__(self, object_manager, objects):
         super(Vertical, self).__init__(object_manager, objects)
 
     def constraints(self):
@@ -546,7 +628,7 @@ class DistanceConstraint(TwoPointConstraint):
         self.label_distance = 100
 
     @classmethod
-    def configure(cls):
+    def configure(cls, objects):
         if cls.horiz:
             dialog = gtk.Dialog("Horizontal distance")
         else:
@@ -630,58 +712,89 @@ class DistanceConstraint(TwoPointConstraint):
         else:
             self.label_distance += offs_x
 
+    def to_dict(self):
+        dictionary = super(DistanceConstraint, self).to_dict()
+        dictionary.update(dict(
+            distance=self.distance,
+            label_distance=self.label_distance
+        ))
+        return dictionary
+
 class HorizDistance(DistanceConstraint):
+    TYPE = 7
     horiz = True
 
 class VertDistance(DistanceConstraint):
+    TYPE = 8
     horiz = False
 
 class Array(Primitive):
-    def __init__(self, object_manager, x, y, constructor,
-                 nx=None, ny=None):
+    TYPE = 9
+    def __init__(self, object_manager, elements, nx, ny):
         super(Array, self).__init__(object_manager)
+        self.elements = elements
+        self.nx = nx
+        self.ny = ny
 
-        if nx == None:
-            dialog = gtk.Dialog("Enter dimensions")
-            array = gtk.Table(2, 2)
-            label1 = gtk.Label("# of pads (x): ")
-            array.attach(label1, 0, 1, 0, 1)
-            entry1 = gtk.Entry()
-            array.attach(entry1, 1, 2, 0, 1)
-            label1.show()
-            entry1.show()
-            label2 = gtk.Label("# of pads (y): ")
-            array.attach(label2, 0, 1, 1, 2)
-            entry2 = gtk.Entry()
-            array.attach(entry2, 1, 2, 1, 2)
-            label2.show()
-            entry2.show()
-            array.show()
-            dialog.get_content_area().add(array)
-            # widget.connect("clicked", lambda x: win2.destroy())
-            dialog.add_button("Ok", 1)
-            dialog.add_button("Cancel", 2)
-            result = dialog.run()
-            if result == 1:
-                self.x = int(entry1.get_text())
-                self.y = int(entry2.get_text())
-            else:
-                del self
-            dialog.destroy()
-        else:
-            self.x = nx
-            self.y = ny
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        nx = configuration['nx']
+        ny = configuration['ny']
+        elemtype = configuration['elemtype']
+        elemcfg = elemtype.configure([])
+        elements = []
+        for i in range(nx):
+            for j in range(ny):
+                p = elemtype.new(object_manager,
+                                 x + (i - nx/2) * 30,
+                                 y + (j - ny/2) * 30,
+                                 elemcfg)
 
-        self.elements = []
-        for i in range(self.x):
-            for j in range(self.y):
-                p = constructor(object_manager,
-                                x + (i - self.x/2) * 30,
-                                y + (j - self.y/2) * 30)
-
-                self.elements.append(p)
+                elements.append(p)
                 object_manager.add_primitive(p, constraining=False,
                                              check_overconstraints=False)
+
+        return cls(object_manager, elements, nx, ny)
+
+    @classmethod
+    def can_create(cls, objects):
+        return len(objects) == 0
+
+    @classmethod
+    def configure(cls, objects):
+        dialog = gtk.Dialog("Enter dimensions")
+        array = gtk.Table(2, 2)
+        label1 = gtk.Label("# of pads (x): ")
+        array.attach(label1, 0, 1, 0, 1)
+        entry1 = gtk.Entry()
+        array.attach(entry1, 1, 2, 0, 1)
+        label1.show()
+        entry1.show()
+        label2 = gtk.Label("# of pads (y): ")
+        array.attach(label2, 0, 1, 1, 2)
+        entry2 = gtk.Entry()
+        array.attach(entry2, 1, 2, 1, 2)
+        label2.show()
+        entry2.show()
+        array.show()
+        dialog.get_content_area().add(array)
+        # widget.connect("clicked", lambda x: win2.destroy())
+        dialog.add_button("Ok", 1)
+        dialog.add_button("Cancel", 2)
+        result = dialog.run()
+        if result == 1:
+            x = int(entry1.get_text())
+            y = int(entry2.get_text())
+            result = dict(
+                elemtype=Pad,
+                nx=x,
+                ny=y,
+            )
+        else:
+            result = False
+        dialog.destroy()
+
+        return result
 
     def dependencies(self):
         return self.elements
@@ -694,7 +807,7 @@ class Array(Primitive):
             child.draw(cr)
 
     def p(self, i, j):
-        return self.elements[j + self.y * i]
+        return self.elements[j + self.ny * i]
 
     def constraints(self):
         all_constraints = []
@@ -702,8 +815,8 @@ class Array(Primitive):
             all_constraints.extend(child.constraints())
 
         # Horizontal/vertical
-        for i in range(0, min(self.x, 2)):
-            for j in range(0, self.y - 1):
+        for i in range(0, min(self.nx, 2)):
+            for j in range(0, self.ny - 1):
                 all_constraints.append(
                     (
                         [(self.p(i, j).center_point(), 1, 0),
@@ -711,8 +824,8 @@ class Array(Primitive):
                          ], 0),
                 )
 
-        for i in range(0, self.x - 1):
-            for j in range(0, min(self.y, 2)):
+        for i in range(0, self.nx - 1):
+            for j in range(0, min(self.ny, 2)):
                 all_constraints.append(
                     (
                         [(self.p(i, j).center_point(), 0, 1),
@@ -721,8 +834,8 @@ class Array(Primitive):
                 )
 
         # Same distance
-        for i in range(0, self.x):
-            for j in range(0, self.y - 2):
+        for i in range(0, self.nx):
+            for j in range(0, self.ny - 2):
                 all_constraints.append(
                     (
                         [(self.p(i, j).center_point(), 0, 1),
@@ -731,8 +844,8 @@ class Array(Primitive):
                          ], 0),
                 )
 
-        for i in range(0, self.x - 2):
-            for j in range(0, self.y):
+        for i in range(0, self.nx - 2):
+            for j in range(0, self.ny):
                 all_constraints.append(
                     (
                         [(self.p(i, j).center_point(), 1, 0),
@@ -743,8 +856,8 @@ class Array(Primitive):
 
         # Same size
         p0_dimensions = self.p(0, 0).dimensions_to_constrain()
-        for i in range(0, self.x):
-            for j in range(0, self.y):
+        for i in range(0, self.nx):
+            for j in range(0, self.ny):
                 if i == j == 0:
                     continue
                 dims = self.p(i, j).dimensions_to_constrain(multiplier=-1)
@@ -766,3 +879,25 @@ class Array(Primitive):
     def drag(self, offs_x, offs_y):
         for child in self.children():
             child.drag(offs_x, offs_y)
+
+    def to_dict(self):
+        child_indices = [
+            self._object_manager.primitive_idx(child)
+            for child in self.children()]
+        return dict(
+            children=child_indices,
+            deps=child_indices,
+        )
+
+PRIMITIVE_TYPES = [
+    None,
+    Point,
+    CenterPoint,
+    Pad,
+    Ball,
+    Horizontal,
+    Vertical,
+    HorizDistance,
+    VertDistance,
+    Array,
+]

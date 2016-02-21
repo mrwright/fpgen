@@ -49,7 +49,7 @@ class FPArea(gtk.DrawingArea):
         self.buttons = {}
 
         # Create the center point
-        p = CenterPoint(self.object_manager, set())
+        p = CenterPoint.new(self.object_manager)
         self.object_manager.add_primitive(p)
         self.deselect_all()
 
@@ -125,17 +125,18 @@ class FPArea(gtk.DrawingArea):
         keyname = gtk.gdk.keyval_name(event.keyval)
         print(keyname)
         if keyname == 'a':
-            p = Pad(self.object_manager, self.x, self.y, 100, 50, None)
-            #p = Ball(self.object_manager, self.x, self.y, 100)
-            self.object_manager.add_primitive(p)
-            self.recalculate()
+            config = Pad.configure([])
+            if config is not False:
+                p = Pad.new(self.object_manager, self.x, self.y, config)
+                #p = Ball(self.object_manager, self.x, self.y, 100)
+                self.object_manager.add_primitive(p)
+                self.recalculate()
         elif keyname == 'p':
-            p = Array(self.object_manager, self.x, self.y,
-                      #lambda om, x, y: Ball(om, x, y, 10)
-                      lambda om, x, y: Pad(om, x, y, 100, 50, None)
-            )
-            self.object_manager.add_primitive(p)
-            self.recalculate()
+            config = Array.configure([])
+            if config is not False:
+                p = Array.new(self.object_manager, self.x, self.y, config)
+                self.object_manager.add_primitive(p)
+                self.recalculate()
         elif keyname == 'Delete':
             print(self.active_object)
             if self.active_object is not None:
@@ -163,14 +164,17 @@ class FPArea(gtk.DrawingArea):
             exit()
         elif keyname == 'w':
             GedaOut.write(self.object_manager.primitives)
+        elif keyname == 's':
+            import json
+            print(json.dumps(self.object_manager.to_dict()))
         else:
             cls = primitive_table.get(keyname)
             if cls:
                 if cls.can_create(self.selected_primitives):
                     configuration = cls.configure()
                     if configuration:
-                        p = cls(self.object_manager, self.selected_primitives,
-                                configuration)
+                        p = cls.new(self.object_manager, self.selected_primitives,
+                                    configuration)
                         self.object_manager.add_primitive(p)
                         self.deselect_all()
                 else:
@@ -181,10 +185,10 @@ class FPArea(gtk.DrawingArea):
 
     def add_new(self, primitive_type):
         if primitive_type.can_create(self.selected_primitives):
-            configuration = primitive_type.configure()
-            if configuration != False:
-                p = primitive_type(self.object_manager, self.selected_primitives,
-                                   configuration)
+            configuration = primitive_type.configure(self.selected_primitives)
+            if configuration is not False:
+                # TODO: x and y coords
+                p = primitive_type.new(self.object_manager, 0, 0, configuration)
                 # TODO: this should really be added as part of the constructor, or
                 # all adding should happen here.
                 self.object_manager.add_primitive(p)
@@ -341,7 +345,8 @@ buttons = [
     ("HDist", HorizDistance),
     ("VDist", VertDistance),
     ("Ball", Ball),
-    ("Pad", Pad)
+    ("Pad", Pad),
+    ("PadAr", Array),
 ]
 
 def create_button_bar(fparea):
