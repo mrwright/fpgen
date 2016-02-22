@@ -12,6 +12,10 @@ from geda_out import GedaOut
 
 
 class FPArea(gtk.DrawingArea):
+    # TODO: this class should really be a standalone file area viewer with a better
+    # interface. The UI stuff should be refactored.
+
+
     @classmethod
     def new(cls):
         self = cls()
@@ -53,7 +57,6 @@ class FPArea(gtk.DrawingArea):
         p = CenterPoint.new(self.object_manager)
         self.object_manager.add_primitive(p)
         self.deselect_all()
-
 
         return self
 
@@ -165,20 +168,6 @@ class FPArea(gtk.DrawingArea):
             exit()
         elif keyname == 'w':
             GedaOut.write(self.object_manager.primitives)
-        elif keyname == 's':
-            d = self.object_manager.to_dict()
-            with open("save.fpg", "w") as f:
-                f.write(json.dumps(d))
-        elif keyname == 'l':
-            with open("save.fpg") as f:
-                contents = f.read()
-                d = json.loads(contents)
-            new_object_manager = ObjectManager.from_dict(d)
-            self.object_manager = new_object_manager
-            self.selected_primitives.clear()
-            self.update_buttons()
-            self.update_closest()
-            self.queue_draw()
         else:
             cls = primitive_table.get(keyname)
             if cls:
@@ -193,6 +182,22 @@ class FPArea(gtk.DrawingArea):
                 else:
                     print("Cannot create constraint.")
             self.recalculate()
+        self.update_closest()
+        self.queue_draw()
+
+    def save(self, fname):
+        d = self.object_manager.to_dict()
+        with open(fname, "w") as f:
+            f.write(json.dumps(d))
+
+    def load(self, fname):
+        with open(fname) as f:
+            contents = f.read()
+        d = json.loads(contents)
+        new_object_manager = ObjectManager.from_dict(d)
+        self.object_manager = new_object_manager
+        self.selected_primitives.clear()
+        self.update_buttons()
         self.update_closest()
         self.queue_draw()
 
@@ -335,12 +340,62 @@ class FPArea(gtk.DrawingArea):
             else:
                 button.set_sensitive(False)
 
-def create_menus():
+def load_save_dialog(action):
+    chooser = gtk.FileChooserDialog(
+        action=action,
+        buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                 gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+    chooser.set_default_response(gtk.RESPONSE_OK)
+
+    fpfiles = gtk.FileFilter()
+    fpfiles.set_name("FPGen files")
+    fpfiles.add_pattern("*.fpg")
+    chooser.add_filter(fpfiles)
+
+    allfiles = gtk.FileFilter()
+    allfiles.set_name("All files")
+    allfiles.add_pattern("*")
+    chooser.add_filter(allfiles)
+
+    return chooser
+
+def do_load(fparea):
+    chooser = load_save_dialog(gtk.FILE_CHOOSER_ACTION_OPEN)
+    response = chooser.run()
+    if response == gtk.RESPONSE_OK:
+        fname = chooser.get_filename()
+        fparea.load(fname)
+
+    chooser.destroy()
+
+def do_saveas(fparea):
+    chooser = load_save_dialog(gtk.FILE_CHOOSER_ACTION_SAVE)
+    chooser.set_do_overwrite_confirmation(True)
+    response = chooser.run()
+    if response == gtk.RESPONSE_OK:
+        fname = chooser.get_filename()
+        fparea.save(fname)
+
+    chooser.destroy()
+
+
+def create_menus(fparea):
     accel_group = gtk.AccelGroup()
     file_menu = gtk.Menu()
+    open_item = gtk.ImageMenuItem(gtk.STOCK_OPEN, accel_group)
+    save_item = gtk.ImageMenuItem(gtk.STOCK_SAVE, accel_group)
+    saveas_item = gtk.ImageMenuItem(gtk.STOCK_SAVE_AS, accel_group)
     quit_item = gtk.ImageMenuItem(gtk.STOCK_QUIT, accel_group)
+    open_item.connect("activate", lambda x: do_load(fparea))
+    saveas_item.connect("activate", lambda x: do_saveas(fparea))
     quit_item.connect("activate", gtk.main_quit)
+    file_menu.append(open_item)
+    file_menu.append(save_item)
+    file_menu.append(saveas_item)
     file_menu.append(quit_item)
+    open_item.show()
+    save_item.show()
+    saveas_item.show()
     quit_item.show()
 
     menu_bar = gtk.MenuBar()
@@ -386,7 +441,7 @@ def run():
     fparea = FPArea.new()
     fparea.set_flags(gtk.CAN_FOCUS)
     vbox = gtk.VBox(False)
-    menu = create_menus()
+    menu = create_menus(fparea)
     vbox.pack_start(menu, False, True, 0)
     hbox = gtk.HBox(False)
     vbox.add(hbox)
