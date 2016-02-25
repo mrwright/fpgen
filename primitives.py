@@ -858,11 +858,12 @@ class VertDistance(DistanceConstraint):
 
 class Array(Primitive):
     TYPE = 9
-    def __init__(self, object_manager, elements, nx, ny):
+    def __init__(self, object_manager, elements, nx, ny, numbering=None):
         super(Array, self).__init__(object_manager)
         self.elements = elements
         self.nx = nx
         self.ny = ny
+        self.numbering=numbering
 
     @classmethod
     def new(cls, object_manager, x, y, configuration):
@@ -956,16 +957,16 @@ class Array(Primitive):
             # TODO: check that the numbering applies.
             combo.append_text(numbering_text)
 
-            numbering_widgets.append(widget_for(numbering_class))
+            numbering_widgets.append((numbering_class, widget_for(numbering_class)))
         combo.set_active(0)
         combo.show()
         numbering_box.pack_start(combo, False, False, 0)
-        for numbering_widget, _ in numbering_widgets:
+        for _, (numbering_widget, _) in numbering_widgets:
             numbering_box.add(numbering_widget)
-        numbering_widgets[0][0].show()
+        numbering_widgets[0][1][0].show()
         numbering_box.show()
         def changed_cb(cb):
-            for idx, (numbering_widget, _) in enumerate(numbering_widgets):
+            for idx, (_, (numbering_widget, _)) in enumerate(numbering_widgets):
                 if cb.get_active() == idx:
                     numbering_widget.show()
                 else:
@@ -973,10 +974,31 @@ class Array(Primitive):
 
         combo.connect("changed", changed_cb)
 
-        return numbering_box, []
+        return numbering_box, (
+            combo,
+            numbering_widgets
+        )
 
-    def reconfigure(self, widget):
-        raise NotImplementedError()
+    def reconfigure(self, widget, other_widgets):
+        def get_value(ty, widget):
+            if ty == str:
+                return widget.get_text()
+            elif ty == int:
+                return int(widget.get_text()) # TODO: error checking?
+            elif ty == bool:
+                return widget.get_active()
+        combobox, all_numberings = other_widgets
+        idx = combobox.get_active()
+        numbering_class, (_, widgetlist) = all_numberings[idx]
+        print numbering_class, widgetlist
+        vals = [
+            get_value(ty, widget)
+            for widget, ty in widgetlist
+        ]
+        print vals
+        self.numbering = numbering_class.new(
+            self.nx, self.ny, vals
+        )
 
     def dependencies(self):
         return self.elements
@@ -1081,6 +1103,15 @@ class Array(Primitive):
             dictionary['nx'],
             dictionary['ny'],
         )
+
+    def number_of(self, child):
+        if not self.numbering:
+            return None
+        for i in xrange(self.nx):
+            for j in xrange(self.ny):
+                if child == self.p(i, j):
+                    return self.numbering.number_of(i, j)
+
 
 
 PRIMITIVE_TYPES = [
