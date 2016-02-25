@@ -3,12 +3,14 @@ pygtk.require('2.0')
 import gtk
 import math
 
+from numbering import all_numberings
 
 class Primitive(object):
-    def __init__(self, object_manager):
+    def __init__(self, object_manager, number=None):
         self._active = False
         self._selected = False
         self._object_manager = object_manager
+        self._number = number
 
     @classmethod
     def new(cls, object_manager, x, y, configuration):
@@ -122,6 +124,28 @@ class Primitive(object):
     def can_create(cls, objects):
         return False
 
+    def parent(self):
+        return self._object_manager.parent_map.get(self)
+
+    def number(self):
+        if self._number is not None:
+            # We're assigned a number directly, so return it.
+            return self._number
+        # We don't have a number assigned directly, so fall back on asking if the
+        # parent assigns a number to us.
+        parent = self.parent()
+        if parent is not None:
+            return parent.number_of(self)
+
+    def number_of(self, child):
+        return None
+
+    def reconfiguration_widget(self):
+        return None
+
+    def reconfigure(self, widget, other_widgets):
+        raise NotImplementedError()
+
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
@@ -227,8 +251,8 @@ class TileablePrimitive(Primitive):
 class Pad(TileablePrimitive):
     TYPE = 3
 
-    def __init__(self, object_manager, points):
-        super(Pad, self).__init__(object_manager)
+    def __init__(self, object_manager, points, number=None):
+        super(Pad, self).__init__(object_manager, number)
         self.points = points
 
     @classmethod
@@ -253,6 +277,29 @@ class Pad(TileablePrimitive):
     def configure(cls, objects, w=100, h=100):
         # TODO: configuration dialog?
         return dict(w=w, h=h)
+
+    def reconfiguration_widget(self):
+        # TODO: this kind of thing appears a lot. We should abstract it away!
+        array = gtk.Table(2, 1)
+        label1 = gtk.Label("Number: ")
+        array.attach(label1, 0, 1, 0, 1)
+        entry1 = gtk.Entry()
+        if self._number:
+            entry1.set_text(self._number)
+        array.attach(entry1, 1, 2, 0, 1)
+        label1.show()
+        entry1.show()
+        array.show()
+        return (array, dict(
+            num_entry=entry1
+        ))
+
+    def reconfigure(self, widget, other_widgets):
+        text = other_widgets['num_entry'].get_text()
+        if text != '':
+            self._number = text
+        else:
+            self._number = None
 
     @classmethod
     def placeable(cls):
@@ -333,6 +380,7 @@ class Pad(TileablePrimitive):
                 eq_vert_constraints)
 
     def draw(self, cr):
+        cr.save()
         if self.selected():
             cr.set_source_rgb(0, 0, 0.7)
         elif self.active():
@@ -341,7 +389,11 @@ class Pad(TileablePrimitive):
             cr.set_source_rgb(0.7, 0.7, 0.7)
         cr.rectangle(self.x0, self.y0, self.w, self.h)
         cr.fill()
+        cr.restore()
         cr.save()
+        if self.number() is not None:
+            cr.move_to(self.x0 + self.w/2, self.y0 + self.h/2)
+            cr.show_text(self.number())
         for child in self.children():
             child.draw(cr)
         cr.restore()
@@ -367,29 +419,31 @@ class Pad(TileablePrimitive):
         return dict(
             points=point_indices,
             deps=point_indices,
+            number=self._number,
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
         return cls(object_manager,
-                   [object_manager.primitives[idx] for idx in dictionary['points']])
+                   [object_manager.primitives[idx] for idx in dictionary['points']],
+                   dictionary['number'])
 
 class Ball(TileablePrimitive):
     TYPE = 4
 
-    def __init__(self, object_manager, points):
-        super(Ball, self).__init__(object_manager)
+    def __init__(self, object_manager, points, number=None):
+        super(Ball, self).__init__(object_manager, number)
         self.points = points
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration):
+    def new(cls, object_manager, x, y, configuration, r=20):
         # Five points: the center point, and four at the compass points around it.
         points = [
-            Point(object_manager, x, y - r/2),
-            Point(object_manager, x - r/2, y),
-            Point(object_manager, x, y),
-            Point(object_manager, x + r/2, y),
-            Point(object_manager, x, y + r/2),
+            Point.new(object_manager, x, y - r/2),
+            Point.new(object_manager, x - r/2, y),
+            Point.new(object_manager, x, y),
+            Point.new(object_manager, x + r/2, y),
+            Point.new(object_manager, x, y + r/2),
         ]
         for point in points:
             object_manager.add_primitive(point, draw=False,
@@ -399,6 +453,29 @@ class Ball(TileablePrimitive):
     @classmethod
     def configure(cls, objects):
         return None
+
+    def reconfiguration_widget(self):
+        # TODO: this kind of thing appears a lot. We should abstract it away!
+        array = gtk.Table(2, 1)
+        label1 = gtk.Label("Number: ")
+        array.attach(label1, 0, 1, 0, 1)
+        entry1 = gtk.Entry()
+        if self._number:
+            entry1.set_text(self._number)
+        array.attach(entry1, 1, 2, 0, 1)
+        label1.show()
+        entry1.show()
+        array.show()
+        return (array, dict(
+            num_entry=entry1
+        ))
+
+    def reconfigure(self, widget, other_widgets):
+        text = other_widgets['num_entry'].get_text()
+        if text != '':
+            self._number = text
+        else:
+            self._number = None
 
     @classmethod
     def placeable(cls):
@@ -473,6 +550,7 @@ class Ball(TileablePrimitive):
                 eq_constraints)
 
     def draw(self, cr):
+        cr.save()
         if self.selected():
             cr.set_source_rgb(0, 0, 0.7)
         elif self.active():
@@ -481,6 +559,10 @@ class Ball(TileablePrimitive):
             cr.set_source_rgb(0.7, 0.7, 0.7)
         cr.arc(self.x, self.y, self.r, 0, 2 * math.pi)
         cr.fill()
+        cr.restore()
+        if self.number() is not None:
+            cr.move_to(self.x, self.y)
+            cr.show_text(self.number())
         cr.save()
         for child in self.children():
             child.draw(cr)
@@ -505,12 +587,14 @@ class Ball(TileablePrimitive):
         return dict(
             points=point_indices,
             deps=point_indices,
+            number=self._number,
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
         return cls(object_manager,
-                   [object_manager.primitives[idx] for idx in dictionary['points']])
+                   [object_manager.primitives[idx] for idx in dictionary['points']],
+                   dictionary['number'])
 
 class TwoPointConstraint(Primitive):
     '''
@@ -839,6 +923,60 @@ class Array(Primitive):
         dialog.destroy()
 
         return result
+
+    def reconfiguration_widget(self):
+        def widget_for(numbering):
+            fields = numbering.fields()
+            table = gtk.Table(2, len(fields))
+            widgetlist = []
+            for idx, (fieldname, fieldtype, fielddefault) in enumerate(fields):
+                fieldlabel = gtk.Label(fieldname + ": ")
+                fieldlabel.show()
+                if fieldtype == int or fieldtype == str:
+                    fieldwidget = gtk.Entry()
+                    if fielddefault is not None:
+                        fieldwidget.set_text(str(fielddefault))
+                elif fieldtype == bool:
+                    fieldwidget = gtk.ToggleButton("Enable")
+                    if fielddefault is not None:
+                        fieldwidget.set_active(fielddefault)
+                else:
+                    raise NotImplementedError("Type was %r" % (fieldtype, ))
+                fieldwidget.show()
+                table.attach(fieldlabel, 0, 1, idx, idx + 1)
+                table.attach(fieldwidget, 1, 2, idx, idx + 1)
+
+                widgetlist.append((fieldwidget, fieldtype))
+            return table, widgetlist
+
+        numbering_box = gtk.VBox()
+        combo = gtk.combo_box_new_text()
+        numbering_widgets = []
+        for numbering_class, numbering_text in all_numberings:
+            # TODO: check that the numbering applies.
+            combo.append_text(numbering_text)
+
+            numbering_widgets.append(widget_for(numbering_class))
+        combo.set_active(0)
+        combo.show()
+        numbering_box.pack_start(combo, False, False, 0)
+        for numbering_widget, _ in numbering_widgets:
+            numbering_box.add(numbering_widget)
+        numbering_widgets[0][0].show()
+        numbering_box.show()
+        def changed_cb(cb):
+            for idx, (numbering_widget, _) in enumerate(numbering_widgets):
+                if cb.get_active() == idx:
+                    numbering_widget.show()
+                else:
+                    numbering_widget.hide()
+
+        combo.connect("changed", changed_cb)
+
+        return numbering_box, []
+
+    def reconfigure(self, widget):
+        raise NotImplementedError()
 
     def dependencies(self):
         return self.elements

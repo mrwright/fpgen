@@ -10,6 +10,22 @@ from primitives import (Pad, Horizontal, Vertical, CenterPoint,
                         Array, HorizDistance, VertDistance, Ball)
 from geda_out import GedaOut
 
+def do_configuration(primitive):
+    print("Reconfigure %r" % primitive)
+    dialog = gtk.Dialog("Configure")
+    (widget, widgets) = primitive.reconfiguration_widget()
+    dialog.get_content_area().add(widget)
+    dialog.add_button("Ok", 1)
+    dialog.add_button("Cancel", 2)
+    parent = primitive.parent()
+    if parent is not None:
+        dialog.add_button("Edit parent", 3)
+    result = dialog.run()
+    if result == 1:
+        primitive.reconfigure(widget, widgets)
+    dialog.destroy()
+    if result == 3:
+        do_configuration(parent)
 
 class FPArea(gtk.DrawingArea):
     # TODO: this class should really be a standalone file area viewer with a better
@@ -81,6 +97,7 @@ class FPArea(gtk.DrawingArea):
         for primitive in self.selected_primitives:
             primitive.deselect()
         self.selected_primitives.clear()
+        self.update_buttons()
 
     def delete(self, obj):
         # TODO: this really should be a method of the object manager.
@@ -168,6 +185,9 @@ class FPArea(gtk.DrawingArea):
             exit()
         elif keyname == 'w':
             GedaOut.write(self.object_manager.primitives)
+        elif keyname == 'r':
+            if self.active_object:
+                do_configuration(self.active_object)
         else:
             cls = primitive_table.get(keyname)
             if cls:

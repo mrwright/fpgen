@@ -40,6 +40,8 @@ class ObjectManager(object):
         self.draw_primitives = []
         # All primitives whose constraints we should consider.
         self.constraining_primitives = []
+        # Map from each primitive to its parent.
+        self.parent_map = {}
 
     def to_dict(self):
         # Note: a lot of stuff here could be made more efficient, but there's
@@ -95,6 +97,7 @@ class ObjectManager(object):
             for idx in dictionary['constraining_primitives']
         ]
         object_manager.update_points()
+        object_manager.update_parent_map()
 
         return object_manager
 
@@ -103,6 +106,12 @@ class ObjectManager(object):
             if primitive == this_primitive:
                 return i
         return None
+
+    def update_parent_map(self):
+        self.parent_map.clear()
+        for primitive in self.primitives:
+            for child in primitive.children():
+                self.parent_map[child] = primitive
 
     def closest(self, x, y):
         '''
@@ -131,6 +140,9 @@ class ObjectManager(object):
                 self.draw_primitives.pop()
             if constraining:
                 self.constraining_primitives.pop()
+        # Note: we don't need to recompute the entire primitive map here, but it
+        # shouldn't be a bottleneck.
+        self.update_parent_map()
 
     def point_dist(self, p1, p2):
         dx = p1[0] - p2[0]
