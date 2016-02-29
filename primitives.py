@@ -400,6 +400,7 @@ class Pad(TileablePrimitive):
         if self.number() is not None:
             cr.move_to(self.x0 + self.w/2, self.y0 + self.h/2)
             cr.show_text(self.number())
+            cr.stroke()
         for child in self.children():
             child.draw(cr)
         cr.restore()
@@ -567,6 +568,7 @@ class Ball(TileablePrimitive):
         if self.number() is not None:
             cr.move_to(self.x, self.y)
             cr.show_text(self.number())
+            cr.stroke()
         cr.save()
         for child in self.children():
             child.draw(cr)
