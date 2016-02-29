@@ -161,7 +161,11 @@ class ObjectManager(object):
         return old
 
     def free_point(self, point_idx):
-        self._all_points.remove(self.point_idx)
+        self._all_points.remove(point_idx)
+        self._point_lru.remove(point_idx)
+        del self._point_coords[point_idx]
+        self._cached_matrix = None
+        self._cached_target = None
 
     def _lru_update(self, p):
         for i in range(len(self._point_lru)):

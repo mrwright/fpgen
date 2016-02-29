@@ -101,11 +101,6 @@ class FPArea(gtk.DrawingArea):
 
     def delete(self, obj):
         # TODO: this really should be a method of the object manager.
-        for p in self.object_manager.primitives:
-            if obj in p.children():
-                # We're a child primitive which must only be deleted through
-                # the parent.
-                return
         to_remove = set([self.active_object])
         while True:
             changed = False
@@ -113,16 +108,20 @@ class FPArea(gtk.DrawingArea):
             new_to_remove = set()
             for c in to_remove:
                 new_to_remove.update(c.children())
+                if not new_to_remove.issubset(to_remove):
+                    changed = True
             to_remove.update(new_to_remove)
             changed = changed or l != len(to_remove)
             for p in self.object_manager.primitives:
                 if p in to_remove:
                     continue
-                if to_remove.intersection(p.dependencies()):
+                if to_remove.intersection(p.dependencies() + p.children()):
                     to_remove.update([p])
                     changed = True
             if not changed:
                 break
+        if any(not x.can_delete() for x in to_remove):
+            return
         for p in to_remove:
             self.object_manager.primitives.remove(p)
             # TODO: these should be sets.
@@ -130,6 +129,7 @@ class FPArea(gtk.DrawingArea):
                 self.object_manager.draw_primitives.remove(p)
             if p in self.object_manager.constraining_primitives:
                 self.object_manager.constraining_primitives.remove(p)
+            p.delete()
 
         self.recalculate()
 
@@ -443,7 +443,6 @@ def create_button_bar(fparea):
     vbox.pack_start(table, False, False, 0)
     for idx, (btext, bcons) in enumerate(buttons):
         button = gtk.Button(btext)
-        print(btext, bcons)
         button.connect("pressed", lambda e, bcons=bcons: fparea.add_new(bcons))
         button.unset_flags(gtk.CAN_FOCUS)
         button.show()

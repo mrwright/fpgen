@@ -3,7 +3,7 @@ pygtk.require('2.0')
 import gtk
 import math
 
-from numbering import all_numberings
+from numbering import all_numberings, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
 
 class Primitive(object):
     def __init__(self, object_manager, number=None):
@@ -146,6 +146,9 @@ class Primitive(object):
     def reconfigure(self, widget, other_widgets):
         raise NotImplementedError()
 
+    def can_delete(self):
+        return True
+
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
@@ -200,8 +203,7 @@ class Point(Primitive):
         self._object_manager.set_point_coords(self.point(), x, y)
 
     def delete(self):
-        # TODO: remove our point from all structures.
-        pass
+        self._object_manager.free_point(self.point())
 
     def to_dict(self):
         return dict(
@@ -240,6 +242,9 @@ class CenterPoint(Point):
 
     def drag(self, offs_x, offs_y):
         pass
+
+    def can_delete(self):
+        return False
 
 class TileablePrimitive(Primitive):
     def dimensions_to_constrain(self):
@@ -739,7 +744,7 @@ class DistanceConstraint(TwoPointConstraint):
         p1 = configuration['p1']
         p2 = configuration['p2']
         dist = configuration['dist']
-        if p1.x > p2.x:
+        if cls.horiz and (p1.x > p2.x) or not cls.horiz and (p1.y > p2.y):
             p1, p2 = p2, p1
         return cls(object_manager, p1, p2, dist, 100)
 
@@ -907,7 +912,6 @@ class Array(Primitive):
         entry2.show()
         array.show()
         dialog.get_content_area().add(array)
-        # widget.connect("clicked", lambda x: win2.destroy())
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
         result = dialog.run()
@@ -936,7 +940,12 @@ class Array(Primitive):
                 if fieldtype == int or fieldtype == str:
                     fieldwidget = gtk.Entry()
                     if fielddefault is not None:
-                        fieldwidget.set_text(str(fielddefault))
+                        if fielddefault is NUMBER_CONST_WIDTH:
+                            fieldwidget.set_text(str(self.nx))
+                        elif fielddefault is NUMBER_CONST_HEIGHT:
+                            fieldwidget.set_text(str(self.ny))
+                        else:
+                            fieldwidget.set_text(str(fielddefault))
                 elif fieldtype == bool:
                     fieldwidget = gtk.ToggleButton("Enable")
                     if fielddefault is not None:
@@ -955,9 +964,10 @@ class Array(Primitive):
         numbering_widgets = []
         for numbering_class, numbering_text in all_numberings:
             # TODO: check that the numbering applies.
-            combo.append_text(numbering_text)
+            if numbering_class.applies(self.nx, self.ny):
+                combo.append_text(numbering_text)
 
-            numbering_widgets.append((numbering_class, widget_for(numbering_class)))
+                numbering_widgets.append((numbering_class, widget_for(numbering_class)))
         combo.set_active(0)
         combo.show()
         numbering_box.pack_start(combo, False, False, 0)
@@ -1105,6 +1115,7 @@ class Array(Primitive):
         )
 
     def number_of(self, child):
+        # TODO: find some better way to accomplish this.
         if not self.numbering:
             return None
         for i in xrange(self.nx):
