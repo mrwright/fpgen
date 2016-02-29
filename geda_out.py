@@ -14,13 +14,13 @@ class GedaOut(object):
             x1 = pad.x1 - pad.h/2.
             y = (pad.y0 + pad.y1)/2.
             print """Pad [{:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm 1200 {:.6f}mm "" "{}" 0x4101]""".format(
-                x0, y, x1, y, pad.h, pad.h + 1, 0)
+                x0, y, x1, y, pad.h, pad.h + 1, pad.number() if pad.number() is not None else 0)
         else:
             y0 = pad.y0 + pad.w/2.
             y1 = pad.y1 - pad.w/2.
             x = (pad.x0 + pad.x1)/2.
             print """Pad [{:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm 1200 {:.6f}mm "" "{}" 0x4101]""".format(
-                x, y0, x, y1, pad.w, pad.w + 1, 0)
+                x, y0, x, y1, pad.w, pad.w + 1, pad.number() if pad.number() is not None else 0)
 
 
     @staticmethod
