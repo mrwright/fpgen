@@ -25,6 +25,20 @@ class Numbering(object):
     def new(cls, w, h, fields):
         return NotImplementedError()
 
+    @classmethod
+    def TYPE(cls):
+        for type_id, (ty, name) in enumerate(ALL_NUMBERINGS):
+            if ty == cls:
+                return type_id
+        raise ValueError()
+
+    def to_dict(self):
+        raise NotImplementedError()
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        raise NotImplementedError()
+
     # TODO: "defaults" method for objects that already exist, for editing the settings.
 
 class OneDNumberRange(Numbering):
@@ -62,6 +76,16 @@ class OneDNumberRange(Numbering):
             increment = -increment
 
         return cls(start_idx, increment)
+
+    def to_dict(self):
+        return dict(
+            start=self._start,
+            skip=self._skip,
+        )
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        return cls(dictionary['start'], dictionary['skip'])
 
 class OneDLetterRange(OneDNumberRange):
     # TODO: this class is a huge hack right now and doesn't at all work right.
@@ -134,9 +158,30 @@ class TwoDNumbers(Numbering):
 
         return cls(start_idx, x_increment, y_increment, x_zigzag, y_zigzag, w, h)
 
+    def to_dict(self):
+        return dict(
+            start=self._start,
+            x_skip=self._x_skip,
+            y_skip=self._y_skip,
+            x_zigzag=self._x_zigzag,
+            y_zigzag=self._y_zigzag,
+            width=self._width,
+            height=self._height,
+        )
 
+    @classmethod
+    def from_dict(cls, dictionary):
+        return cls(
+            dictionary['start'],
+            dictionary['x_skip'],
+            dictionary['y_skip'],
+            dictionary['x_zigzag'],
+            dictionary['y_zigzag'],
+            dictionary['width'],
+            dictionary['height'],
+        )
 
-all_numberings = [
+ALL_NUMBERINGS = [
     (OneDNumberRange, "Number range with increment"),
     (OneDLetterRange, "Letter range with increment"),
     (TwoDNumbers, "Number increments in two dimensions"),

@@ -3,7 +3,7 @@ pygtk.require('2.0')
 import gtk
 import math
 
-from numbering import all_numberings, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
+from numbering import ALL_NUMBERINGS, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
 
 class Primitive(object):
     def __init__(self, object_manager, number=None):
@@ -20,7 +20,7 @@ class Primitive(object):
         pass
 
     def to_dict(self):
-        return {}
+        return NotImplementedError()
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
@@ -149,12 +149,17 @@ class Primitive(object):
     def can_delete(self):
         return True
 
+    @classmethod
+    def TYPE(cls):
+        for type_id, ty in enumerate(PRIMITIVE_TYPES):
+            if ty == cls:
+                return type_id
+        raise ValueError()
+
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
     '''
-    TYPE = 1
-
     def __init__(self, object_manager, point):
         super(Point, self).__init__(object_manager)
         self.p = point
@@ -216,8 +221,6 @@ class Point(Primitive):
                    dictionary['point_idx'])
 
 class CenterPoint(Point):
-    TYPE = 2
-
     def __init__(self, object_manager, point):
         super(CenterPoint, self).__init__(object_manager, point)
 
@@ -254,8 +257,6 @@ class TileablePrimitive(Primitive):
         return None
 
 class Pad(TileablePrimitive):
-    TYPE = 3
-
     def __init__(self, object_manager, points, number=None):
         super(Pad, self).__init__(object_manager, number)
         self.points = points
@@ -434,8 +435,6 @@ class Pad(TileablePrimitive):
                    dictionary['number'])
 
 class Ball(TileablePrimitive):
-    TYPE = 4
-
     def __init__(self, object_manager, points, number=None):
         super(Ball, self).__init__(object_manager, number)
         self.points = points
@@ -650,8 +649,6 @@ class TwoPointConstraint(Primitive):
                    [object_manager.primitives[idx] for idx in dictionary['points']])
 
 class Horizontal(TwoPointConstraint):
-    TYPE = 5
-
     def __init__(self, object_manager, objects):
         super(Horizontal, self).__init__(object_manager, objects)
 
@@ -693,8 +690,6 @@ class Horizontal(TwoPointConstraint):
 
 
 class Vertical(TwoPointConstraint):
-    TYPE = 6
-
     def __init__(self, object_manager, objects):
         super(Vertical, self).__init__(object_manager, objects)
 
@@ -854,15 +849,12 @@ class DistanceConstraint(TwoPointConstraint):
         )
 
 class HorizDistance(DistanceConstraint):
-    TYPE = 7
     horiz = True
 
 class VertDistance(DistanceConstraint):
-    TYPE = 8
     horiz = False
 
 class Array(Primitive):
-    TYPE = 9
     def __init__(self, object_manager, elements, nx, ny, numbering=None):
         super(Array, self).__init__(object_manager)
         self.elements = elements
@@ -962,7 +954,7 @@ class Array(Primitive):
         numbering_box = gtk.VBox()
         combo = gtk.combo_box_new_text()
         numbering_widgets = []
-        for numbering_class, numbering_text in all_numberings:
+        for numbering_class, numbering_text in ALL_NUMBERINGS:
             # TODO: check that the numbering applies.
             if numbering_class.applies(self.nx, self.ny):
                 combo.append_text(numbering_text)
@@ -997,9 +989,9 @@ class Array(Primitive):
                 return int(widget.get_text()) # TODO: error checking?
             elif ty == bool:
                 return widget.get_active()
-        combobox, all_numberings = other_widgets
+        combobox, ALL_NUMBERINGS = other_widgets
         idx = combobox.get_active()
-        numbering_class, (_, widgetlist) = all_numberings[idx]
+        numbering_class, (_, widgetlist) = ALL_NUMBERINGS[idx]
         print numbering_class, widgetlist
         vals = [
             get_value(ty, widget)
@@ -1103,15 +1095,20 @@ class Array(Primitive):
             deps=child_indices,
             nx=self.nx,
             ny=self.ny,
+            numbering_type=self.numbering.TYPE(),
+            numbering=self.numbering.to_dict(),
         )
-    #object_manager, elements, nx, ny
+
     @classmethod
     def from_dict(cls, object_manager, dictionary):
+        numbering_cls_id = dictionary['numbering_type']
+        numbering_cls, _ = ALL_NUMBERINGS[numbering_cls_id]
         return cls(
             object_manager,
             [object_manager.primitives[child] for child in dictionary['children']],
             dictionary['nx'],
             dictionary['ny'],
+            numbering_cls.from_dict(dictionary['numbering']),
         )
 
     def number_of(self, child):

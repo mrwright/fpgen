@@ -48,7 +48,7 @@ class ObjectManager(object):
         # not really any point.
         primitive_dicts = [dict(
             index=idx,
-            primitive_type=primitive.TYPE,
+            primitive_type=primitive.TYPE(),
             primitive_dict=primitive.to_dict()
         ) for idx, primitive in enumerate(self.primitives)]
         return dict(
