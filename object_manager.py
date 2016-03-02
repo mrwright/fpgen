@@ -264,6 +264,7 @@ class ObjectManager(object):
             matrix.append(row)
             targets.append(target)
         # We now have a matrix with all explicit constraints.
+        print "Degrees of freedom: %d" % (2 * n - len(matrix))
 
         self._target_map_x = {}
         self._target_map_y = {}
