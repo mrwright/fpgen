@@ -99,40 +99,6 @@ class FPArea(gtk.DrawingArea):
         self.selected_primitives.clear()
         self.update_buttons()
 
-    def delete(self, obj):
-        # TODO: this really should be a method of the object manager.
-        to_remove = set([self.active_object])
-        while True:
-            changed = False
-            l = len(to_remove)
-            new_to_remove = set()
-            for c in to_remove:
-                new_to_remove.update(c.children())
-                if not new_to_remove.issubset(to_remove):
-                    changed = True
-            to_remove.update(new_to_remove)
-            changed = changed or l != len(to_remove)
-            for p in self.object_manager.primitives:
-                if p in to_remove:
-                    continue
-                if to_remove.intersection(p.dependencies() + p.children()):
-                    to_remove.update([p])
-                    changed = True
-            if not changed:
-                break
-        if any(not x.can_delete() for x in to_remove):
-            return
-        for p in to_remove:
-            self.object_manager.primitives.remove(p)
-            # TODO: these should be sets.
-            if p in self.object_manager.draw_primitives:
-                self.object_manager.draw_primitives.remove(p)
-            if p in self.object_manager.constraining_primitives:
-                self.object_manager.constraining_primitives.remove(p)
-            p.delete()
-
-        self.recalculate()
-
     def key_press_event(self, event):
         # TODO: refactor this so it's not some monolithic function
         # with what's effectively a huge case statement. It's not too
@@ -161,7 +127,7 @@ class FPArea(gtk.DrawingArea):
         elif keyname == 'Delete':
             print(self.active_object)
             if self.active_object is not None:
-                self.delete(self.active_object)
+                self.object_manager.delete_primitive(self.active_object)
             self.recalculate()
         elif keyname == 'dd':
             if len(self.selected_primitives) == 2:

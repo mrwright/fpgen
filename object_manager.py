@@ -144,6 +144,39 @@ class ObjectManager(object):
         # shouldn't be a bottleneck.
         self.update_parent_map()
 
+    def delete_primitive(self, obj):
+        to_remove = set([obj])
+        while True:
+            changed = False
+            l = len(to_remove)
+            new_to_remove = set()
+            for c in to_remove:
+                new_to_remove.update(c.children())
+                if not new_to_remove.issubset(to_remove):
+                    changed = True
+            to_remove.update(new_to_remove)
+            changed = changed or l != len(to_remove)
+            for p in self.primitives:
+                if p in to_remove:
+                    continue
+                if to_remove.intersection(p.dependencies() + p.children()):
+                    to_remove.update([p])
+                    changed = True
+            if not changed:
+                break
+        if any(not x.can_delete() for x in to_remove):
+            return
+        for p in to_remove:
+            self.primitives.remove(p)
+            # TODO: these should be sets.
+            if p in self.draw_primitives:
+                self.draw_primitives.remove(p)
+            if p in self.constraining_primitives:
+                self.constraining_primitives.remove(p)
+            p.delete()
+
+        self.update_points()
+
     def point_dist(self, p1, p2):
         dx = p1[0] - p2[0]
         dy = p1[1] - p2[1]
