@@ -12,7 +12,7 @@ from primitives import PRIMITIVE_TYPES
 
 
 class ObjectManager(object):
-    def __init__(self):
+    def __init__(self, default_clearance, default_mask):
         # Points are each assigned a number; next_point_idx contains the number
         # to assign to the next point we allocate.
         self._next_point_idx = 0
@@ -42,6 +42,8 @@ class ObjectManager(object):
         self.constraining_primitives = []
         # Map from each primitive to its parent.
         self.parent_map = {}
+        self.default_clearance = default_clearance
+        self.default_mask = default_mask
 
     def to_dict(self):
         # Note: a lot of stuff here could be made more efficient, but there's
@@ -52,6 +54,8 @@ class ObjectManager(object):
             primitive_dict=primitive.to_dict()
         ) for idx, primitive in enumerate(self.primitives)]
         return dict(
+            default_mask=self.default_mask,
+            default_clearance=self.default_clearance,
             next_point_idx=self._next_point_idx,
             all_points=list(self._all_points),
             point_coords=self._point_coords,
@@ -64,7 +68,8 @@ class ObjectManager(object):
 
     @staticmethod
     def from_dict(dictionary):
-        object_manager = ObjectManager()
+        object_manager = ObjectManager(dictionary['default_clearance'],
+                                       dictionary['default_mask'])
         object_manager._all_points = set(dictionary['all_points'])
         object_manager._point_lru = dictionary['all_points']
         object_manager._next_point_idx = dictionary['next_point_idx']

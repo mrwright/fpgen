@@ -41,6 +41,32 @@ class Numbering(object):
 
     # TODO: "defaults" method for objects that already exist, for editing the settings.
 
+class NoNumbers(Numbering):
+    def __init__(self):
+        pass
+
+    def number_of(self, i, j):
+        return None
+
+    @classmethod
+    def applies(cls, w, h):
+        return True
+
+    @classmethod
+    def fields(cls):
+        return []
+
+    @classmethod
+    def new(cls, w, h, fields):
+        return cls()
+
+    def to_dict(self):
+        return dict()
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        return cls.new()
+
 class OneDNumberRange(Numbering):
     def __init__(self, start, skip):
         self._start = start
@@ -182,6 +208,7 @@ class TwoDNumbers(Numbering):
         )
 
 ALL_NUMBERINGS = [
+    (NoNumbers, "Do not assign numbers"),
     (OneDNumberRange, "Number range with increment"),
     (OneDLetterRange, "Letter range with increment"),
     (TwoDNumbers, "Number increments in two dimensions"),

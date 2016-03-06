@@ -6,9 +6,12 @@ import math
 from numbering import ALL_NUMBERINGS, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
 
 class Primitive(object):
-    def __init__(self, object_manager, number=None):
+    def __init__(self, object_manager, number=None, clearance=None, mask=None):
+        # TODO: active and selected should be parameters to draw, not properties.
         self._active = False
         self._selected = False
+        self._clearance = clearance
+        self._mask = mask
         self._object_manager = object_manager
         self._number = number
 
@@ -140,6 +143,26 @@ class Primitive(object):
     def number_of(self, child):
         return None
 
+    def clearance(self):
+        if self._clearance is not None:
+            return self._clearance
+        else:
+            parent = self.parent()
+            if parent:
+                return parent.clearance()
+            else:
+                return self._object_manager.default_clearance
+
+    def mask(self):
+        if self._mask is not None:
+            return self._mask
+        else:
+            parent = self.parent()
+            if parent:
+                return parent.mask()
+            else:
+                return self._object_manager.default_mask
+
     def reconfiguration_widget(self):
         return None
 
@@ -155,6 +178,33 @@ class Primitive(object):
             if ty == cls:
                 return type_id
         raise ValueError()
+
+    @classmethod
+    def _reconfiguration_widget(cls, fields):
+        n = len(fields)
+        array = gtk.Table(2, n)
+
+        widgets = []
+        for idx, (label, itemty, itemdefault) in enumerate(fields):
+            label_widget = gtk.Label(label + ": ")
+            array.attach(label_widget, 0, 1, idx, idx + 1)
+            # TODO: other types
+            entry_widget = gtk.Entry()
+            if itemdefault:
+                entry_widget.set_text(itemdefault)
+            array.attach(entry_widget, 1, 2, idx, idx + 1)
+            widgets.append(entry_widget)
+            label_widget.show()
+            entry_widget.show()
+            array.show()
+        return (array, widgets)
+
+    @classmethod
+    def _reconfigure(cls, other_widgets):
+        return tuple(
+            widget.get_text() if widget.get_text() != '' else None
+            for widget in other_widgets
+        )
 
 class Point(Primitive):
     '''
@@ -257,8 +307,8 @@ class TileablePrimitive(Primitive):
         return None
 
 class Pad(TileablePrimitive):
-    def __init__(self, object_manager, points, number=None):
-        super(Pad, self).__init__(object_manager, number)
+    def __init__(self, object_manager, points, number=None, clearance=None, mask=None):
+        super(Pad, self).__init__(object_manager, number, clearance, mask)
         self.points = points
 
     @classmethod
@@ -285,27 +335,18 @@ class Pad(TileablePrimitive):
         return dict(w=w, h=h)
 
     def reconfiguration_widget(self):
-        # TODO: this kind of thing appears a lot. We should abstract it away!
-        array = gtk.Table(2, 1)
-        label1 = gtk.Label("Number: ")
-        array.attach(label1, 0, 1, 0, 1)
-        entry1 = gtk.Entry()
-        if self._number:
-            entry1.set_text(self._number)
-        array.attach(entry1, 1, 2, 0, 1)
-        label1.show()
-        entry1.show()
-        array.show()
-        return (array, dict(
-            num_entry=entry1
-        ))
+        return self._reconfiguration_widget(
+            [
+                ("Number", int, self._number),
+                ("Clearance", int, self._clearance),
+                ("Mask", int, self._mask),
+            ]
+        )
 
     def reconfigure(self, widget, other_widgets):
-        text = other_widgets['num_entry'].get_text()
-        if text != '':
-            self._number = text
-        else:
-            self._number = None
+        (self._number,
+         self._clearance,
+         self._mask) = self._reconfigure(other_widgets)
 
     @classmethod
     def placeable(cls):
@@ -427,13 +468,17 @@ class Pad(TileablePrimitive):
             points=point_indices,
             deps=point_indices,
             number=self._number,
+            clearance=self._clearance,
+            mask=self._mask,
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
         return cls(object_manager,
                    [object_manager.primitives[idx] for idx in dictionary['points']],
-                   dictionary['number'])
+                   dictionary['number'],
+                   dictionary['clearance'],
+                   dictionary['mask'])
 
 class Ball(TileablePrimitive):
     def __init__(self, object_manager, points, number=None):
@@ -460,27 +505,18 @@ class Ball(TileablePrimitive):
         return None
 
     def reconfiguration_widget(self):
-        # TODO: this kind of thing appears a lot. We should abstract it away!
-        array = gtk.Table(2, 1)
-        label1 = gtk.Label("Number: ")
-        array.attach(label1, 0, 1, 0, 1)
-        entry1 = gtk.Entry()
-        if self._number:
-            entry1.set_text(self._number)
-        array.attach(entry1, 1, 2, 0, 1)
-        label1.show()
-        entry1.show()
-        array.show()
-        return (array, dict(
-            num_entry=entry1
-        ))
+        return self._reconfiguration_widget(
+            [
+                ("Number", int, self._number),
+                ("Clearance", int, self._clearance),
+                ("Mask", int, self._mask),
+            ]
+        )
 
     def reconfigure(self, widget, other_widgets):
-        text = other_widgets['num_entry'].get_text()
-        if text != '':
-            self._number = text
-        else:
-            self._number = None
+        (self._number,
+         self._clearance,
+         self._mask) = self._reconfigure(other_widgets)
 
     @classmethod
     def placeable(cls):
@@ -594,13 +630,17 @@ class Ball(TileablePrimitive):
             points=point_indices,
             deps=point_indices,
             number=self._number,
+            clearance=self._clearance,
+            mask=self._mask,
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
         return cls(object_manager,
                    [object_manager.primitives[idx] for idx in dictionary['points']],
-                   dictionary['number'])
+                   dictionary['number'],
+                   dictionary['clearance'],
+                   dictionary['mask'])
 
 class TwoPointConstraint(Primitive):
     '''

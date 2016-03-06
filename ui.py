@@ -63,7 +63,7 @@ class FPArea(gtk.DrawingArea):
         self.pixmap = None
         # Whether we're currently in the middle of a drag.
         self.dragging = False
-        self.object_manager = ObjectManager()
+        self.object_manager = ObjectManager(6, 2)
         self.active_object = None
         self.dragging_object = None
         self.selected_primitives = set()
@@ -279,7 +279,6 @@ class FPArea(gtk.DrawingArea):
         else:
             x = event.x
             y = event.y
-            # state = event.state
 
         orig_x, orig_y = self.x, self.y
         self.x, self.y = self.coord_map(x, y)
@@ -363,7 +362,6 @@ def do_saveas(fparea):
         fparea.save(fname)
 
     chooser.destroy()
-
 
 def create_menus(fparea):
     accel_group = gtk.AccelGroup()
