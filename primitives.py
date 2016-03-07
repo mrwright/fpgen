@@ -180,23 +180,31 @@ class Primitive(object):
         raise ValueError()
 
     @classmethod
-    def _reconfiguration_widget(cls, fields):
+    def _configuration_widget_items(cls, fields):
+        widgets = []
+        for label, itemty, itemdefault in fields:
+            label_widget = gtk.Label(label + ": ")
+            # TODO: other types
+            entry_widget = gtk.Entry()
+            if itemdefault is not None:
+                entry_widget.set_text(str(itemdefault))
+            label_widget.show()
+            entry_widget.show()
+            widgets.append((label_widget, entry_widget))
+        return widgets
+
+    @classmethod
+    def _configuration_widget(cls, fields):
         n = len(fields)
         array = gtk.Table(2, n)
 
         widgets = []
-        for idx, (label, itemty, itemdefault) in enumerate(fields):
-            label_widget = gtk.Label(label + ": ")
-            array.attach(label_widget, 0, 1, idx, idx + 1)
-            # TODO: other types
-            entry_widget = gtk.Entry()
-            if itemdefault:
-                entry_widget.set_text(itemdefault)
-            array.attach(entry_widget, 1, 2, idx, idx + 1)
-            widgets.append(entry_widget)
-            label_widget.show()
-            entry_widget.show()
-            array.show()
+        for idx, (label, entry) in enumerate(cls._configuration_widget_items(fields)):
+            array.attach(label, 0, 1, idx, idx + 1)
+            array.attach(entry, 1, 2, idx, idx + 1)
+            widgets.append(entry)
+
+        array.show()
         return (array, widgets)
 
     @classmethod
@@ -335,7 +343,7 @@ class Pad(TileablePrimitive):
         return dict(w=w, h=h)
 
     def reconfiguration_widget(self):
-        return self._reconfiguration_widget(
+        return self._configuration_widget(
             [
                 ("Number", int, self._number),
                 ("Clearance", int, self._clearance),
@@ -505,7 +513,7 @@ class Ball(TileablePrimitive):
         return None
 
     def reconfiguration_widget(self):
-        return self._reconfiguration_widget(
+        return self._configuration_widget(
             [
                 ("Number", int, self._number),
                 ("Clearance", int, self._clearance),
@@ -896,6 +904,185 @@ class HorizDistance(DistanceConstraint):
 class VertDistance(DistanceConstraint):
     horiz = False
 
+class Coincident(TwoPointConstraint):
+    def __init__(self, object_manager, objects):
+        super(Coincident, self).__init__(object_manager, objects)
+
+    def constraints(self):
+        return [
+            ([(self.p1.point(), 0, 1), (self.p2.point(), 0, -1)], 0),
+            ([(self.p1.point(), 1, 0), (self.p2.point(), -1, 0)], 0),
+        ]
+
+    def dist(self, p):
+        dist = self._object_manager.point_dist(
+            p, (self.p1.x, self.p1.y))
+        if dist < 10:
+            return dist + 1
+        else:
+            return dist - 1
+
+    def draw(self, cr):
+        if self.active():
+            cr.set_source_rgb(1, 0, 0)
+        elif self.selected():
+            # TODO: if both are the case.
+            cr.set_source_rgb(0.4, 0.4, 1)
+        else:
+            cr.set_source_rgb(0, 1, 0)
+        cr.set_line_width(0.5)
+        #cr.set_dash([2, 2])
+        cr.move_to(self.p1.x - 5, self.p1.y - 5)
+        cr.line_to(self.p2.x + 5, self.p2.y + 5)
+        cr.stroke()
+        cr.move_to(self.p1.x + 5, self.p1.y - 5)
+        cr.line_to(self.p2.x - 5, self.p2.y + 5)
+        cr.stroke()
+
+class MarkedLine(Primitive):
+    def __init__(self, object_manager, points, fraction):
+        super(MarkedLine, self).__init__(object_manager)
+        self._points = points
+        self._fraction = fraction
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        points = [
+            Point.new(object_manager,
+                      x + (i - 1) * 100,
+                      y)
+            for i in xrange(3)
+        ]
+        for point in points:
+            object_manager.add_primitive(point, draw=True,
+                                         check_overconstraints=False)
+        return MarkedLine(object_manager, points, configuration)
+
+    @classmethod
+    def configure(cls, objects):
+        dialog = gtk.Dialog("Horizontal distance")
+        widget, entry_widgets = cls._configuration_widget(
+            [
+                ("Fraction", float, "0.5"),
+            ]
+        )
+        dialog.get_content_area().add(widget)
+        dialog.add_button("Ok", 1)
+        dialog.add_button("Cancel", 2)
+        result = dialog.run()
+        if result == 1:
+            result = float(entry_widgets[0].get_text())
+        else:
+            result = False
+        dialog.destroy()
+
+        return result
+
+    def reconfiguration_widget(self):
+        return self._configuration_widget(
+            [
+                ("Fraction", float, self._fraction),
+            ]
+        )
+
+    def reconfigure(self, widget, other_widgets):
+        (fraction, ) = self._reconfigure(other_widgets)
+        self._fraction = float(fraction)
+
+    @classmethod
+    def can_create(self, objects):
+        return len(objects) == 0
+
+    @property
+    def p1(self):
+        return self._points[0]
+
+    @property
+    def p2(self):
+        return self._points[2]
+
+    def draw(self, cr):
+        if self.selected():
+            cr.set_source_rgb(0.4, 0.4, 1)
+            cr.set_line_width(0.5)
+            cr.set_dash([2, 2], 2)
+            cr.move_to(self.p1.x, self.p1.y)
+            cr.line_to(self.p2.x, self.p2.y)
+            cr.stroke()
+        if self.active():
+            cr.set_source_rgb(1, 0, 0)
+        else:
+            cr.set_source_rgb(0, 1, 0)
+        cr.set_line_width(0.5)
+        cr.set_dash([2, 2])
+        cr.move_to(self.p1.x, self.p1.y)
+        cr.line_to(self.p2.x, self.p2.y)
+        cr.stroke()
+
+    def constraints(self):
+        return [
+            ([(self._points[0].point(), 0, (1 - self._fraction)),
+              (self._points[2].point(), 0, self._fraction),
+              (self._points[1].point(), 0, -1),
+            ], 0),
+            ([(self._points[0].point(), (1 - self._fraction), 0),
+              (self._points[2].point(), self._fraction, 0),
+              (self._points[1].point(), -1, 0),
+            ], 0),
+        ]
+
+    def children(self):
+        return self._points
+
+    def drag(self, offs_x, offs_y):
+        '''
+        Drag ourselves by a certain delta in the x and y directions.
+        This will likely want to drag all children.
+        '''
+        for point in self._points:
+            point.drag(offs_x, offs_y)
+
+    def dist(self, p):
+        def normalize(p):
+            mag = p[0] * p[0] + p[1] * p[1]
+            sqrtmag = math.sqrt(mag)
+            return (p[0]/sqrtmag, p[1]/sqrtmag), sqrtmag
+        v1, _ = normalize((p[0] - self.p1.x, p[1] - self.p1.y))
+        v2, _ = normalize((p[0] - self.p2.x, p[1] - self.p2.y))
+        v3_orig = (self.p2.x - self.p1.x, self.p2.y - self.p1.y)
+        v3, v3mag = normalize(v3_orig)
+
+        if v1[0] * v3[0] + v1[1] * v3[1] < 0:
+            res = self._object_manager.point_dist(p, (self.p1.x, self.p1.y))
+        elif v2[0] * v3[0] + v2[1] * v3[1] > 0:
+            res = self._object_manager.point_dist(p, (self.p2.x, self.p2.y))
+        else:
+            res = abs(
+                v3_orig[1] * p[0] - v3_orig[0] * p[1]
+                + self.p2.x * self.p1.y - self.p2.y * self.p1.x
+            ) / v3mag
+            res = res * res
+
+        if res < 10:
+            return 10
+        else:
+            return res
+
+    def to_dict(self):
+        point_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in self._points]
+        return dict(
+            points=point_indices,
+            fraction=self._fraction,
+        )
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        points = [object_manager.primitives[idx] for idx in dictionary['points']]
+        return cls(object_manager, points, dictionary['fraction'])
+
+
 class Array(Primitive):
     def __init__(self, object_manager, elements, nx, ny, numbering=None):
         super(Array, self).__init__(object_manager)
@@ -966,7 +1153,10 @@ class Array(Primitive):
     def reconfiguration_widget(self):
         def widget_for(numbering):
             fields = numbering.fields()
-            table = gtk.Table(2, len(fields))
+            if fields:
+                table = gtk.Table(2, len(fields))
+            else:
+                table = gtk.VBox()
             widgetlist = []
             for idx, (fieldname, fieldtype, fielddefault) in enumerate(fields):
                 fieldlabel = gtk.Label(fieldname + ": ")
@@ -993,8 +1183,29 @@ class Array(Primitive):
                 widgetlist.append((fieldwidget, fieldtype))
             return table, widgetlist
 
+        fields = [
+            ("Clearance", int, self._clearance),
+            ("Mask", int, self._mask),
+        ]
+        n = len(fields)
+
+        reconfiguration_widget = gtk.Table(2, 2 + n)
+        widgetlist = []
+        for idx, (label, entry) in enumerate(self._configuration_widget_items(fields)):
+            reconfiguration_widget.attach(label, 0, 1, idx, idx + 1)
+            reconfiguration_widget.attach(entry, 1, 2, idx, idx + 1)
+
+            widgetlist.append(entry)
+
+        numbering_label = gtk.Label("Numbering: ")
+        numbering_label.show()
+        reconfiguration_widget.attach(numbering_label, 0, 1, n, n + 1)
+
         numbering_box = gtk.VBox()
         combo = gtk.combo_box_new_text()
+        reconfiguration_widget.attach(combo, 1, 2, n, n + 1)
+        reconfiguration_widget.attach(numbering_box, 0, 2, n + 1, n + 2)
+
         numbering_widgets = []
         for numbering_class, numbering_text in ALL_NUMBERINGS:
             # TODO: check that the numbering applies.
@@ -1009,6 +1220,7 @@ class Array(Primitive):
             numbering_box.add(numbering_widget)
         numbering_widgets[0][1][0].show()
         numbering_box.show()
+        reconfiguration_widget.show()
         def changed_cb(cb):
             for idx, (_, (numbering_widget, _)) in enumerate(numbering_widgets):
                 if cb.get_active() == idx:
@@ -1018,9 +1230,10 @@ class Array(Primitive):
 
         combo.connect("changed", changed_cb)
 
-        return numbering_box, (
+        return reconfiguration_widget, (
             combo,
-            numbering_widgets
+            numbering_widgets,
+            widgetlist,
         )
 
     def reconfigure(self, widget, other_widgets):
@@ -1031,7 +1244,7 @@ class Array(Primitive):
                 return int(widget.get_text()) # TODO: error checking?
             elif ty == bool:
                 return widget.get_active()
-        combobox, ALL_NUMBERINGS = other_widgets
+        combobox, ALL_NUMBERINGS, reconf_widgetlist = other_widgets
         idx = combobox.get_active()
         numbering_class, (_, widgetlist) = ALL_NUMBERINGS[idx]
         print numbering_class, widgetlist
@@ -1039,10 +1252,11 @@ class Array(Primitive):
             get_value(ty, widget)
             for widget, ty in widgetlist
         ]
-        print vals
         self.numbering = numbering_class.new(
             self.nx, self.ny, vals
         )
+
+        self._clearance, self._mask = self._reconfigure(reconf_widgetlist)
 
     def dependencies(self):
         return self.elements
@@ -1170,9 +1384,11 @@ PRIMITIVE_TYPES = [
     CenterPoint,
     Pad,
     Ball,
+    Coincident,
     Horizontal,
     Vertical,
     HorizDistance,
     VertDistance,
+    MarkedLine,
     Array,
 ]

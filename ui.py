@@ -6,7 +6,7 @@ import gtk
 import json
 
 from object_manager import ObjectManager
-from primitives import (Pad, Horizontal, Vertical, CenterPoint,
+from primitives import (Pad, Coincident, MarkedLine, Horizontal, Vertical, CenterPoint,
                         Array, HorizDistance, VertDistance, Ball)
 from geda_out import GedaOut
 
@@ -92,6 +92,8 @@ class FPArea(gtk.DrawingArea):
 
     def recalculate(self):
         self.object_manager.update_points()
+        self.update_closest()
+        self.queue_draw()
 
     def deselect_all(self):
         for primitive in self.selected_primitives:
@@ -154,6 +156,7 @@ class FPArea(gtk.DrawingArea):
         elif keyname == 'r':
             if self.active_object:
                 do_configuration(self.active_object)
+                self.recalculate()
         else:
             cls = primitive_table.get(keyname)
             if cls:
@@ -168,8 +171,6 @@ class FPArea(gtk.DrawingArea):
                 else:
                     print("Cannot create constraint.")
             self.recalculate()
-        self.update_closest()
-        self.queue_draw()
 
     def save(self, fname):
         d = self.object_manager.to_dict()
@@ -392,6 +393,7 @@ def create_menus(fparea):
     return menu_bar
 
 buttons = [
+    ("Coinc", Coincident),
     ("Horiz", Horizontal),
     ("Vert", Vertical),
     ("HDist", HorizDistance),
@@ -399,6 +401,7 @@ buttons = [
     ("Ball", Ball),
     ("Pad", Pad),
     ("PadAr", Array),
+    ("MarkLine", MarkedLine),
 ]
 
 def create_button_bar(fparea):
