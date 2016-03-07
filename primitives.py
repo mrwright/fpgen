@@ -1050,6 +1050,8 @@ class MarkedLine(Primitive):
 
 
 class Array(Primitive):
+    ELEMTYPE = None
+
     def __init__(self, object_manager, elements, nx, ny, numbering=None):
         super(Array, self).__init__(object_manager)
         self.elements = elements
@@ -1061,15 +1063,14 @@ class Array(Primitive):
     def new(cls, object_manager, x, y, configuration):
         nx = configuration['nx']
         ny = configuration['ny']
-        elemtype = configuration['elemtype']
-        elemcfg = elemtype.configure([])
+        elemcfg = cls.ELEMTYPE.configure([])
         elements = []
         for i in range(nx):
             for j in range(ny):
-                p = elemtype.new(object_manager,
-                                 x + (i - nx/2) * 30,
-                                 y + (j - ny/2) * 30,
-                                 elemcfg)
+                p = cls.ELEMTYPE.new(object_manager,
+                                     x + (i - nx/2) * 30,
+                                     y + (j - ny/2) * 30,
+                                     elemcfg)
 
                 elements.append(p)
                 object_manager.add_primitive(p, constraining=False,
@@ -1085,13 +1086,13 @@ class Array(Primitive):
     def configure(cls, objects):
         dialog = gtk.Dialog("Enter dimensions")
         array = gtk.Table(2, 2)
-        label1 = gtk.Label("# of pads (x): ")
+        label1 = gtk.Label("# of elements (x): ")
         array.attach(label1, 0, 1, 0, 1)
         entry1 = gtk.Entry()
         array.attach(entry1, 1, 2, 0, 1)
         label1.show()
         entry1.show()
-        label2 = gtk.Label("# of pads (y): ")
+        label2 = gtk.Label("# of elements (y): ")
         array.attach(label2, 0, 1, 1, 2)
         entry2 = gtk.Entry()
         array.attach(entry2, 1, 2, 1, 2)
@@ -1106,7 +1107,6 @@ class Array(Primitive):
             x = int(entry1.get_text())
             y = int(entry2.get_text())
             result = dict(
-                elemtype=Pad,
                 nx=x,
                 ny=y,
             )
@@ -1317,7 +1317,7 @@ class Array(Primitive):
             deps=child_indices,
             nx=self.nx,
             ny=self.ny,
-            numbering_type=self.numbering.TYPE(),
+            numbering_type=self.numbering.TYPE() if self.numbering else None,
             numbering=self.numbering.to_dict(),
         )
 
@@ -1342,7 +1342,11 @@ class Array(Primitive):
                 if child == self.p(i, j):
                     return self.numbering.number_of(i, j)
 
+class PadArray(Array):
+    ELEMTYPE = Pad
 
+class BallArray(Array):
+    ELEMTYPE = Ball
 
 PRIMITIVE_TYPES = [
     None,
@@ -1356,5 +1360,6 @@ PRIMITIVE_TYPES = [
     HorizDistance,
     VertDistance,
     MarkedLine,
-    Array,
+    PadArray,
+    BallArray,
 ]

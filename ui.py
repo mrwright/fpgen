@@ -7,7 +7,7 @@ import json
 
 from object_manager import ObjectManager
 from primitives import (Pad, Coincident, MarkedLine, Horizontal, Vertical, CenterPoint,
-                        Array, HorizDistance, VertDistance, Ball)
+                        PadArray, BallArray, HorizDistance, VertDistance, Ball)
 from geda_out import GedaOut
 
 def do_configuration(primitive):
@@ -400,7 +400,8 @@ buttons = [
     ("VDist", VertDistance),
     ("Ball", Ball),
     ("Pad", Pad),
-    ("PadAr", Array),
+    ("PadAr", PadArray),
+    ("BallAr", BallArray),
     ("MarkLine", MarkedLine),
 ]
 
