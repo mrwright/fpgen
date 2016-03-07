@@ -4,6 +4,7 @@ import gtk
 import math
 
 from numbering import ALL_NUMBERINGS, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
+from ui_utils import configuration_widget_items, configuration_widget, reconfigure
 
 class Primitive(object):
     def __init__(self, object_manager, number=None, clearance=None, mask=None):
@@ -179,41 +180,6 @@ class Primitive(object):
                 return type_id
         raise ValueError()
 
-    @classmethod
-    def _configuration_widget_items(cls, fields):
-        widgets = []
-        for label, itemty, itemdefault in fields:
-            label_widget = gtk.Label(label + ": ")
-            # TODO: other types
-            entry_widget = gtk.Entry()
-            if itemdefault is not None:
-                entry_widget.set_text(str(itemdefault))
-            label_widget.show()
-            entry_widget.show()
-            widgets.append((label_widget, entry_widget))
-        return widgets
-
-    @classmethod
-    def _configuration_widget(cls, fields):
-        n = len(fields)
-        array = gtk.Table(2, n)
-
-        widgets = []
-        for idx, (label, entry) in enumerate(cls._configuration_widget_items(fields)):
-            array.attach(label, 0, 1, idx, idx + 1)
-            array.attach(entry, 1, 2, idx, idx + 1)
-            widgets.append(entry)
-
-        array.show()
-        return (array, widgets)
-
-    @classmethod
-    def _reconfigure(cls, other_widgets):
-        return tuple(
-            widget.get_text() if widget.get_text() != '' else None
-            for widget in other_widgets
-        )
-
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
@@ -343,7 +309,7 @@ class Pad(TileablePrimitive):
         return dict(w=w, h=h)
 
     def reconfiguration_widget(self):
-        return self._configuration_widget(
+        return configuration_widget(
             [
                 ("Number", int, self._number),
                 ("Clearance", int, self._clearance),
@@ -354,7 +320,7 @@ class Pad(TileablePrimitive):
     def reconfigure(self, widget, other_widgets):
         (self._number,
          self._clearance,
-         self._mask) = self._reconfigure(other_widgets)
+         self._mask) = reconfigure(other_widgets)
 
     @classmethod
     def placeable(cls):
@@ -513,7 +479,7 @@ class Ball(TileablePrimitive):
         return None
 
     def reconfiguration_widget(self):
-        return self._configuration_widget(
+        return configuration_widget(
             [
                 ("Number", int, self._number),
                 ("Clearance", int, self._clearance),
@@ -524,7 +490,7 @@ class Ball(TileablePrimitive):
     def reconfigure(self, widget, other_widgets):
         (self._number,
          self._clearance,
-         self._mask) = self._reconfigure(other_widgets)
+         self._mask) = reconfigure(other_widgets)
 
     @classmethod
     def placeable(cls):
@@ -961,7 +927,7 @@ class MarkedLine(Primitive):
     @classmethod
     def configure(cls, objects):
         dialog = gtk.Dialog("Horizontal distance")
-        widget, entry_widgets = cls._configuration_widget(
+        widget, entry_widgets = configuration_widget(
             [
                 ("Fraction", float, "0.5"),
             ]
@@ -979,14 +945,14 @@ class MarkedLine(Primitive):
         return result
 
     def reconfiguration_widget(self):
-        return self._configuration_widget(
+        return configuration_widget(
             [
                 ("Fraction", float, self._fraction),
             ]
         )
 
     def reconfigure(self, widget, other_widgets):
-        (fraction, ) = self._reconfigure(other_widgets)
+        (fraction, ) = reconfigure(other_widgets)
         self._fraction = float(fraction)
 
     @classmethod
@@ -1191,7 +1157,7 @@ class Array(Primitive):
 
         reconfiguration_widget = gtk.Table(2, 2 + n)
         widgetlist = []
-        for idx, (label, entry) in enumerate(self._configuration_widget_items(fields)):
+        for idx, (label, entry) in enumerate(configuration_widget_items(fields)):
             reconfiguration_widget.attach(label, 0, 1, idx, idx + 1)
             reconfiguration_widget.attach(entry, 1, 2, idx, idx + 1)
 
@@ -1256,7 +1222,7 @@ class Array(Primitive):
             self.nx, self.ny, vals
         )
 
-        self._clearance, self._mask = self._reconfigure(reconf_widgetlist)
+        self._clearance, self._mask = reconfigure(reconf_widgetlist)
 
     def dependencies(self):
         return self.elements
