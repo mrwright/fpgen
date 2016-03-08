@@ -455,7 +455,7 @@ class Ball(TileablePrimitive):
             Point.new(object_manager, x, y + r/2),
         ]
         for point in points:
-            object_manager.add_primitive(point, draw=False,
+            object_manager.add_primitive(point, draw=True,
                                          check_overconstraints=False)
         return cls(object_manager, points)
 
@@ -564,10 +564,6 @@ class Ball(TileablePrimitive):
             cr.move_to(self.x, self.y)
             cr.show_text(self.number())
             cr.stroke()
-        cr.save()
-        for child in self.children():
-            child.draw(cr)
-        cr.restore()
 
     def drag(self, offs_x, offs_y):
         for point in self.points:
@@ -1050,6 +1046,7 @@ class MarkedLine(Primitive):
 
 class Array(Primitive):
     ELEMTYPE = None
+    ZORDER = 3
 
     def __init__(self, object_manager, elements, nx, ny, numbering=None):
         super(Array, self).__init__(object_manager)
