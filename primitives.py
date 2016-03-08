@@ -1048,12 +1048,13 @@ class Array(Primitive):
     ELEMTYPE = None
     ZORDER = 3
 
-    def __init__(self, object_manager, elements, nx, ny, numbering=None):
+    def __init__(self, object_manager, elements, nx, ny, centerpoint, numbering=None):
         super(Array, self).__init__(object_manager)
         self.elements = elements
         self.nx = nx
         self.ny = ny
-        self.numbering=numbering
+        self.numbering = numbering
+        self.centerpoint = centerpoint
 
     @classmethod
     def new(cls, object_manager, x, y, configuration):
@@ -1072,7 +1073,16 @@ class Array(Primitive):
                 object_manager.add_primitive(p, constraining=False,
                                              check_overconstraints=False)
 
-        return cls(object_manager, elements, nx, ny)
+        if (nx%2 == 0) or (ny%2 == 0):
+            # If either dimension is even, add a center point
+            p = Point.new(object_manager, x, y)
+            object_manager.add_primitive(p, constraining=False,
+                                         check_overconstraints=False)
+            centerpoint = p
+        else:
+            centerpoint = None
+
+        return cls(object_manager, elements, nx, ny, centerpoint)
 
     @classmethod
     def can_create(cls, objects):
@@ -1221,10 +1231,10 @@ class Array(Primitive):
         self._clearance, self._mask = reconfigure(reconf_widgetlist)
 
     def dependencies(self):
-        return self.elements
+        return self.elements + ([self.centerpoint] if self.centerpoint is not None else [])
 
     def children(self):
-        return self.elements
+        return self.elements + ([self.centerpoint] if self.centerpoint is not None else [])
 
     def draw(self, cr, active, selected):
         pass
@@ -1289,6 +1299,18 @@ class Array(Primitive):
                         (p0dims + pdims, 0),
                     )
 
+        if self.centerpoint is not None:
+            all_constraints.extend([
+                ([(self.centerpoint.point(), -2, 0),
+                  (self.p(0, 0).center_point(), 1, 0),
+                  (self.p(self.nx - 1, 0).center_point(), 1, 0)
+                ], 0),
+                ([(self.centerpoint.point(), 0, -2),
+                  (self.p(0, 0).center_point(), 0, 1),
+                  (self.p(0, self.ny - 1).center_point(), 0, 1)
+                ], 0)
+            ])
+
         return all_constraints
 
     def dist(self, p):
@@ -1313,19 +1335,25 @@ class Array(Primitive):
             nx=self.nx,
             ny=self.ny,
             numbering_type=self.numbering.TYPE() if self.numbering else None,
-            numbering=self.numbering.to_dict(),
+            numbering=self.numbering.to_dict() if self.numbering else None,
+            centerpoint=(self._object_manager.primitive_idx(self.centerpoint)
+                         if self.centerpoint is not None else None),
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
         numbering_cls_id = dictionary['numbering_type']
-        numbering_cls, _ = ALL_NUMBERINGS[numbering_cls_id]
+        numbering_cls, _ = (ALL_NUMBERINGS[numbering_cls_id]
+                            if numbering_cls_id else None, None)
+        centerpoint_idx = dictionary['centerpoint']
         return cls(
             object_manager,
             [object_manager.primitives[child] for child in dictionary['children']],
             dictionary['nx'],
             dictionary['ny'],
-            numbering_cls.from_dict(dictionary['numbering']),
+            (object_manager.primitives[centerpoint_idx]
+             if centerpoint_idx is not None else None),
+            numbering_cls.from_dict(dictionary['numbering']) if numbering_cls else None,
         )
 
     def number_of(self, child):
