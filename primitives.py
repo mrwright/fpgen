@@ -76,35 +76,11 @@ class Primitive(object):
         '''
         return None
 
-    def draw(self, cr):
+    def draw(self, cr, active, selected):
         '''
         Draw this object using the given Cairo context.
         '''
         pass
-
-    def activate(self):
-        '''
-        Set ourselves as active. This can affect how we're drawn.
-        '''
-        self._active = True
-
-    def deactivate(self):
-        self._active = False
-
-    def active(self):
-        return self._active
-
-    def select(self):
-        '''
-        Set ourselves as selected. This can affect how we're drawn.
-        '''
-        self._selected = True
-
-    def deselect(self):
-        self._selected = False
-
-    def selected(self):
-        return self._selected
 
     def delete(self):
         pass
@@ -184,6 +160,9 @@ class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
     '''
+    NAME = "Point"
+    ZORDER = 0
+
     def __init__(self, object_manager, point):
         super(Point, self).__init__(object_manager)
         self.p = point
@@ -210,14 +189,14 @@ class Point(Primitive):
     def dist(self, p):
         return self._object_manager.point_dist((self.x, self.y), p)
 
-    def draw(self, cr):
-        if self.active():
+    def draw(self, cr, active, selected):
+        if active:
             cr.set_source_rgb(1, 0, 0)
 
             cr.arc(self.x, self.y, 2, 0, 6.2)
             cr.fill()
 
-        if self.selected():
+        if selected:
             cr.set_source_rgb(0, 0, 1)
         else:
             cr.set_source_rgb(0.5, 0.5, 0.5)
@@ -245,6 +224,8 @@ class Point(Primitive):
                    dictionary['point_idx'])
 
 class CenterPoint(Point):
+    NAME = "Center point"
+
     def __init__(self, object_manager, point):
         super(CenterPoint, self).__init__(object_manager, point)
 
@@ -274,6 +255,8 @@ class CenterPoint(Point):
         return False
 
 class TileablePrimitive(Primitive):
+    ZORDER = 1
+
     def dimensions_to_constrain(self):
         return []
 
@@ -281,6 +264,8 @@ class TileablePrimitive(Primitive):
         return None
 
 class Pad(TileablePrimitive):
+    NAME = "Pad"
+
     def __init__(self, object_manager, points, number=None, clearance=None, mask=None):
         super(Pad, self).__init__(object_manager, number, clearance, mask)
         self.points = points
@@ -299,7 +284,7 @@ class Pad(TileablePrimitive):
                               y + (j - 1) * h/2)
                 )
         for point in points:
-            object_manager.add_primitive(point, draw=False,
+            object_manager.add_primitive(point, draw=True,
                                          check_overconstraints=False)
         return cls(object_manager, points)
 
@@ -400,11 +385,11 @@ class Pad(TileablePrimitive):
                 eq_horiz_constraints +
                 eq_vert_constraints)
 
-    def draw(self, cr):
+    def draw(self, cr, active, selected):
         cr.save()
-        if self.selected():
+        if selected:
             cr.set_source_rgb(0, 0, 0.7)
-        elif self.active():
+        elif active:
             cr.set_source_rgb(0.7, 0, 0)
         else:
             cr.set_source_rgb(0.7, 0.7, 0.7)
@@ -416,8 +401,6 @@ class Pad(TileablePrimitive):
             cr.move_to(self.x0 + self.w/2, self.y0 + self.h/2)
             cr.show_text(self.number())
             cr.stroke()
-        for child in self.children():
-            child.draw(cr)
         cr.restore()
 
     def drag(self, offs_x, offs_y):
@@ -455,6 +438,8 @@ class Pad(TileablePrimitive):
                    dictionary['mask'])
 
 class Ball(TileablePrimitive):
+    NAME = "Ball"
+
     def __init__(self, object_manager, points, number=None):
         super(Ball, self).__init__(object_manager, number)
         self.points = points
@@ -564,11 +549,11 @@ class Ball(TileablePrimitive):
                 eq_vert_constraints +
                 eq_constraints)
 
-    def draw(self, cr):
+    def draw(self, cr, active, selected):
         cr.save()
-        if self.selected():
+        if selected:
             cr.set_source_rgb(0, 0, 0.7)
-        elif self.active():
+        elif active:
             cr.set_source_rgb(0.7, 0, 0)
         else:
             cr.set_source_rgb(0.7, 0.7, 0.7)
@@ -620,6 +605,8 @@ class TwoPointConstraint(Primitive):
     '''
     Base class for any constraint between two points.
     '''
+    ZORDER = 1
+
     def __init__(self, object_manager, objects):
         assert self.can_create(objects)
         l = list(objects)
@@ -665,6 +652,8 @@ class TwoPointConstraint(Primitive):
                    [object_manager.primitives[idx] for idx in dictionary['points']])
 
 class Horizontal(TwoPointConstraint):
+    NAME = "Horizontal constraint"
+
     def __init__(self, object_manager, objects):
         super(Horizontal, self).__init__(object_manager, objects)
 
@@ -686,15 +675,15 @@ class Horizontal(TwoPointConstraint):
         else:
             return 10 + (y - p1.y) * (y - p1.y)
 
-    def draw(self, cr):
-        if self.selected():
+    def draw(self, cr, active, selected):
+        if selected:
             cr.set_source_rgb(0.4, 0.4, 1)
             cr.set_line_width(0.5)
             cr.set_dash([2, 2], 2)
             cr.move_to(self.p1.x, self.p1.y)
             cr.line_to(self.p2.x, self.p2.y)
             cr.stroke()
-        if self.active():
+        if active:
             cr.set_source_rgb(1, 0, 0)
         else:
             cr.set_source_rgb(0, 1, 0)
@@ -706,6 +695,8 @@ class Horizontal(TwoPointConstraint):
 
 
 class Vertical(TwoPointConstraint):
+    NAME = "Vertical constraint"
+
     def __init__(self, object_manager, objects):
         super(Vertical, self).__init__(object_manager, objects)
 
@@ -727,10 +718,10 @@ class Vertical(TwoPointConstraint):
         else:
             return 10 + (x - p1.x) * (x - p1.x)
 
-    def draw(self, cr):
-        if self.selected():
+    def draw(self, cr, active, selected):
+        if selected:
             cr.set_source_rgb(0, 0, 1)
-        elif self.active():
+        elif active:
             cr.set_source_rgb(1, 0, 0)
         else:
             cr.set_source_rgb(0, 1, 0)
@@ -801,10 +792,10 @@ class DistanceConstraint(TwoPointConstraint):
                 ([(self.p2.point(), 0, 1), (self.p1.point(), 0, -1)], self.distance)
             ]
 
-    def draw(self, cr):
-        if self.selected():
+    def draw(self, cr, active, selected):
+        if selected:
             cr.set_source_rgb(0, 0, 1)
-        elif self.active():
+        elif active:
             cr.set_source_rgb(1, 0, 0)
         else:
             cr.set_source_rgb(0, 0, 0)
@@ -865,12 +856,18 @@ class DistanceConstraint(TwoPointConstraint):
         )
 
 class HorizDistance(DistanceConstraint):
+    NAME = "Horizontal distance constraint"
+
     horiz = True
 
 class VertDistance(DistanceConstraint):
+    NAME = "Vertical distance constraint"
+
     horiz = False
 
 class Coincident(TwoPointConstraint):
+    NAME = "Coincident constraint"
+
     def __init__(self, object_manager, objects):
         super(Coincident, self).__init__(object_manager, objects)
 
@@ -888,10 +885,10 @@ class Coincident(TwoPointConstraint):
         else:
             return dist - 1
 
-    def draw(self, cr):
-        if self.active():
+    def draw(self, cr, active, selected):
+        if active:
             cr.set_source_rgb(1, 0, 0)
-        elif self.selected():
+        elif selected:
             # TODO: if both are the case.
             cr.set_source_rgb(0.4, 0.4, 1)
         else:
@@ -906,6 +903,8 @@ class Coincident(TwoPointConstraint):
         cr.stroke()
 
 class MarkedLine(Primitive):
+    NAME = "Marked line"
+
     def __init__(self, object_manager, points, fraction):
         super(MarkedLine, self).__init__(object_manager)
         self._points = points
@@ -967,15 +966,15 @@ class MarkedLine(Primitive):
     def p2(self):
         return self._points[2]
 
-    def draw(self, cr):
-        if self.selected():
+    def draw(self, cr, active, selected):
+        if selected:
             cr.set_source_rgb(0.4, 0.4, 1)
             cr.set_line_width(0.5)
             cr.set_dash([2, 2], 2)
             cr.move_to(self.p1.x, self.p1.y)
             cr.line_to(self.p2.x, self.p2.y)
             cr.stroke()
-        if self.active():
+        if active:
             cr.set_source_rgb(1, 0, 0)
         else:
             cr.set_source_rgb(0, 1, 0)
@@ -1230,9 +1229,8 @@ class Array(Primitive):
     def children(self):
         return self.elements
 
-    def draw(self, cr):
-        for child in self.children():
-            child.draw(cr)
+    def draw(self, cr, active, selected):
+        pass
 
     def p(self, i, j):
         return self.elements[j + self.ny * i]
@@ -1343,9 +1341,11 @@ class Array(Primitive):
                     return self.numbering.number_of(i, j)
 
 class PadArray(Array):
+    NAME = "Pad array"
     ELEMTYPE = Pad
 
 class BallArray(Array):
+    NAME = "Ball array"
     ELEMTYPE = Ball
 
 PRIMITIVE_TYPES = [

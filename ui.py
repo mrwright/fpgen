@@ -3,6 +3,7 @@ from __future__ import print_function
 import pygtk
 pygtk.require('2.0')
 import gtk
+import itertools
 import json
 
 from object_manager import ObjectManager
@@ -54,6 +55,9 @@ class FPArea(gtk.DrawingArea):
         # Where we last saw the mouse.
         self.x = 0
         self.y = 0
+        # Where a "select other" in progress was started.
+        self.active_x = None
+        self.active_y = None
         # Offsets for converting between screen coordinates and logical
         # coordinates.
         self.scale_x = 100
@@ -144,10 +148,8 @@ class FPArea(gtk.DrawingArea):
             if self.active_object is not None:
                 if self.active_object in self.selected_primitives:
                     self.selected_primitives.remove(self.active_object)
-                    self.active_object.deselect()
                 else:
                     self.selected_primitives.add(self.active_object)
-                    self.active_object.select()
                 self.update_buttons()
         elif keyname == 'q':
             exit()
@@ -171,6 +173,8 @@ class FPArea(gtk.DrawingArea):
                 else:
                     print("Cannot create constraint.")
             self.recalculate()
+        self.update_closest()
+        self.queue_draw()
 
     def save(self, fname):
         d = self.object_manager.to_dict()
@@ -233,17 +237,22 @@ class FPArea(gtk.DrawingArea):
                 y / self.scale_factor - self.scale_y)
 
     def update_closest(self):
+        # TODO: point_dist should be its own utility function.
+        if self.active_x is not None:
+            dist =  self.object_manager.point_dist(
+                (self.x, self.y),
+                (self.active_x, self.active_y))
+            print(dist, self.x, self.active_x)
+            if dist < 100:
+                return
+        self.active_x = None
+        self.active_y = None
+
         (p, dist) = self.object_manager.closest(self.x, self.y)
 
         if dist < 100:
-            if self.active_object is not None and p is not None:
-                self.active_object.deactivate()
             self.active_object = p
-            if p is not None:
-                p.activate()
         else:
-            if self.active_object is not None:
-                self.active_object.deactivate()
             self.active_object = None
 
     def draw(self, cr):
@@ -253,9 +262,23 @@ class FPArea(gtk.DrawingArea):
         # cr.set_source_rgb(1, 1, 0)
         # cr.arc(self.x, self.y, 2, 0, 6.2)
         # cr.fill()
-        for primitive in self.object_manager.draw_primitives:
+
+        # TODO: v
+        self.object_manager.draw_primitives.sort(
+            key=lambda x: x.ZORDER, reverse=True)
+
+        for primitive in itertools.chain(
+                (primitive for primitive in self.object_manager.draw_primitives
+                 if primitive is not self.active_object
+                 and primitive not in self.selected_primitives),
+                (primitive for primitive in self.object_manager.draw_primitives
+                 if primitive is not self.active_object
+                 and primitive in self.selected_primitives),
+                (self.active_object,) if self.active_object is not None else ()):
             cr.save()
-            primitive.draw(cr)
+            primitive.draw(cr,
+                           primitive is self.active_object,
+                           primitive in self.selected_primitives)
             cr.restore()
         if self.object_manager.point_coords:
             self.update_closest()
@@ -289,8 +312,21 @@ class FPArea(gtk.DrawingArea):
             self.x, self.y = self.coord_map(x, y)
         if self.dragging_object is not None:
             self.dragging_object.drag(self.x - orig_x, self.y - orig_y)
+        if self.active_x is not None and (self.dragging or self.dragging_object is not None):
+            self.active_x += (self.x - orig_x)
+            self.active_y += (self.y - orig_y)
         self.queue_draw()
         return True
+
+    def select_other(self, menuitem, state, primitive):
+        if state == gtk.STATE_NORMAL:
+            print(primitive)
+            self.active_object = primitive
+            x, y = self.get_pointer()
+            self.x, self.y = self.coord_map(x, y)
+            self.active_x = self.x
+            self.active_y = self.y
+            self.queue_draw()
 
     def click_event(self, event):
         x, y = self.coord_map(event.x, event.y)
@@ -309,6 +345,15 @@ class FPArea(gtk.DrawingArea):
             self.queue_draw()
         elif event.button == 2:
             self.dragging = True
+        elif event.button == 3:
+            menu = gtk.Menu()
+            for _, primitive in self.object_manager.all_within(x, y, 1000):
+                item = gtk.MenuItem(primitive.NAME)
+                item.connect("state-changed", self.select_other, primitive)
+                menu.append(item)
+                item.show()
+            menu.connect("deactivate", lambda *a, **kw: menu.destroy())
+            menu.popup(None, None, None, event.button, event.time)
         return True
 
     def release_event(self, event):

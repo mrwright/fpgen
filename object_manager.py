@@ -131,6 +131,16 @@ class ObjectManager(object):
                 p = primitive
         return (p, dist)
 
+    def all_within(self, x, y, radius):
+        l = []
+        for primitive in self.primitives:
+            this_dist = primitive.dist((x, y))
+            if this_dist is not None and this_dist < radius:
+                l.append((this_dist, primitive))
+
+        l.sort(key=lambda x: x[0])
+        return l
+
     def add_primitive(self, primitive, draw=True, constraining=True,
                       check_overconstraints=True):
         self.primitives.append(primitive)
