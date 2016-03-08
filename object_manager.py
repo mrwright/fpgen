@@ -44,6 +44,7 @@ class ObjectManager(object):
         self.parent_map = {}
         self.default_clearance = default_clearance
         self.default_mask = default_mask
+        self.degrees_of_freedom = 0
 
     def to_dict(self):
         # Note: a lot of stuff here could be made more efficient, but there's
@@ -313,6 +314,7 @@ class ObjectManager(object):
             targets.append(target)
         # We now have a matrix with all explicit constraints.
         print "Degrees of freedom: %d" % (2 * n - len(matrix))
+        self.degrees_of_freedom = (2 * n - len(matrix))
 
         self._target_map_x = {}
         self._target_map_y = {}

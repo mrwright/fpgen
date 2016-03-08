@@ -78,6 +78,8 @@ class FPArea(gtk.DrawingArea):
         self.object_manager.add_primitive(p)
         self.deselect_all()
 
+        self.update_dof_fn = None
+
         return self
 
     def scroll_event(self, event):
@@ -100,8 +102,6 @@ class FPArea(gtk.DrawingArea):
         self.queue_draw()
 
     def deselect_all(self):
-        for primitive in self.selected_primitives:
-            primitive.deselect()
         self.selected_primitives.clear()
         self.update_buttons()
 
@@ -134,6 +134,7 @@ class FPArea(gtk.DrawingArea):
             print(self.active_object)
             if self.active_object is not None:
                 self.object_manager.delete_primitive(self.active_object)
+            self.active_object = None
             self.recalculate()
         elif keyname == 'dd':
             if len(self.selected_primitives) == 2:
@@ -282,12 +283,18 @@ class FPArea(gtk.DrawingArea):
             cr.restore()
         if self.object_manager.point_coords:
             self.update_closest()
+        self.update_dof()
         return
 
         # cr.restore()
         # cr.move_to(10, 10)
         # cr.show_text("(%s, %s)" % (x, y))
         # cr.stroke()
+
+    def update_dof(self):
+        if not self.update_dof_fn:
+            return
+        self.update_dof_fn(str(self.object_manager.degrees_of_freedom))
 
     def draw_pixmap(self, width, height):
         rect = (int(self.x-5), int(self.y-5), 10, 10)
@@ -339,6 +346,8 @@ class FPArea(gtk.DrawingArea):
                 print("Start drag")
                 self.dragging_object = self.active_object
                 self.dragging_object.drag(0, 0)
+                self.active_x = self.x
+                self.active_y = self.y
                 self.recalculate()
             else:
                 self.dragging_object = None
@@ -468,7 +477,8 @@ def create_button_bar(fparea):
 
 def run():
     window = gtk.Window()
-    window.set_geometry_hints(min_width=600, min_height=600)
+    window.set_geometry_hints(min_width=300, min_height=300)
+    window.set_default_size(800, 600)
     window.connect("delete-event", gtk.main_quit)
     fparea = FPArea.new()
     fparea.set_flags(gtk.CAN_FOCUS)
@@ -479,7 +489,21 @@ def run():
     vbox.add(hbox)
     buttonbar = create_button_bar(fparea)
     hbox.pack_start(buttonbar, False, True, 0)
-    hbox.add(fparea)
+    area_vbox = gtk.VBox()
+    area_vbox.add(fparea)
+    status_hbox = gtk.HBox()
+    dof_label = gtk.Label("Degrees of freedom: ")
+    dof_contents_label = gtk.Label("0")
+    status_hbox.pack_start(dof_label, False, False, 0)
+    status_hbox.pack_start(dof_contents_label, False, False, 0)
+    fparea.update_dof_fn = dof_contents_label.set_text
+
+    area_vbox.pack_end(status_hbox, False, False, 0)
+    dof_label.show()
+    dof_contents_label.show()
+    status_hbox.show()
+    area_vbox.show()
+    hbox.add(area_vbox)
     hbox.show()
     vbox.show()
     window.add(vbox)
