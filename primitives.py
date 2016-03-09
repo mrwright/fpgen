@@ -297,8 +297,8 @@ class Pad(TileablePrimitive):
         return configuration_widget(
             [
                 ("Number", int, self._number),
-                ("Clearance", int, self._clearance),
-                ("Mask", int, self._mask),
+                ("Clearance", float, self._clearance),
+                ("Mask", float, self._mask),
             ]
         )
 
@@ -467,8 +467,8 @@ class Ball(TileablePrimitive):
         return configuration_widget(
             [
                 ("Number", int, self._number),
-                ("Clearance", int, self._clearance),
-                ("Mask", int, self._mask),
+                ("Clearance", float, self._clearance),
+                ("Mask", float, self._mask),
             ]
         )
 
@@ -1091,24 +1091,17 @@ class Array(Primitive):
     @classmethod
     def configure(cls, objects):
         dialog = gtk.Dialog("Enter dimensions")
-        array = gtk.Table(2, 2)
-        label1 = gtk.Label("# of elements (x): ")
-        array.attach(label1, 0, 1, 0, 1)
-        entry1 = gtk.Entry()
-        array.attach(entry1, 1, 2, 0, 1)
-        label1.show()
-        entry1.show()
-        label2 = gtk.Label("# of elements (y): ")
-        array.attach(label2, 0, 1, 1, 2)
-        entry2 = gtk.Entry()
-        array.attach(entry2, 1, 2, 1, 2)
-        label2.show()
-        entry2.show()
-        array.show()
-        dialog.get_content_area().add(array)
+        widget, entry_widgets = configuration_widget(
+            [
+                ("# of elements (x)", int, None),
+                ("# of elements (y)", int, None),
+            ]
+        )
+        dialog.get_content_area().add(widget)
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
         result = dialog.run()
+        entry1, entry2 = tuple(entry_widgets)
         if result == 1:
             x = int(entry1.get_text())
             y = int(entry2.get_text())

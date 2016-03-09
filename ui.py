@@ -10,6 +10,7 @@ from object_manager import ObjectManager
 from primitives import (Pad, Coincident, MarkedLine, Horizontal, Vertical, CenterPoint,
                         PadArray, BallArray, HorizDistance, VertDistance, Ball)
 from geda_out import GedaOut
+from ui_utils import configuration_widget
 
 def do_configuration(primitive):
     print("Reconfigure %r" % primitive)
@@ -399,7 +400,7 @@ def load_save_dialog(action):
 
     return chooser
 
-def do_load(fparea):
+def do_load(_, fparea):
     chooser = load_save_dialog(gtk.FILE_CHOOSER_ACTION_OPEN)
     response = chooser.run()
     if response == gtk.RESPONSE_OK:
@@ -408,7 +409,7 @@ def do_load(fparea):
 
     chooser.destroy()
 
-def do_saveas(fparea):
+def do_saveas(_, fparea):
     chooser = load_save_dialog(gtk.FILE_CHOOSER_ACTION_SAVE)
     chooser.set_do_overwrite_confirmation(True)
     response = chooser.run()
@@ -418,15 +419,39 @@ def do_saveas(fparea):
 
     chooser.destroy()
 
+def do_fp_settings(_, fparea):
+    dialog = gtk.Dialog("Footprint settings")
+    widget, entry_widgets = configuration_widget(
+        [
+            ("Clearance", float, fparea.object_manager.default_clearance),
+            ("Mask", float, fparea.object_manager.default_mask),
+        ]
+    )
+    dialog.get_content_area().add(widget)
+    dialog.add_button("Ok", 1)
+    dialog.add_button("Cancel", 2)
+    result = dialog.run()
+    if result == 1:
+        entry1, entry2 = tuple(entry_widgets)
+        clearance = float(entry1.get_text())
+        mask = float(entry2.get_text())
+        fparea.object_manager.default_clearance = clearance
+        fparea.object_manager.default_mask = mask
+    dialog.destroy()
+
+    return result
+
+
 def create_menus(fparea):
     accel_group = gtk.AccelGroup()
+
     file_menu = gtk.Menu()
     open_item = gtk.ImageMenuItem(gtk.STOCK_OPEN, accel_group)
     save_item = gtk.ImageMenuItem(gtk.STOCK_SAVE, accel_group)
     saveas_item = gtk.ImageMenuItem(gtk.STOCK_SAVE_AS, accel_group)
     quit_item = gtk.ImageMenuItem(gtk.STOCK_QUIT, accel_group)
-    open_item.connect("activate", lambda x: do_load(fparea))
-    saveas_item.connect("activate", lambda x: do_saveas(fparea))
+    open_item.connect("activate", do_load, fparea)
+    saveas_item.connect("activate", do_saveas, fparea)
     quit_item.connect("activate", gtk.main_quit)
     file_menu.append(open_item)
     file_menu.append(save_item)
@@ -437,12 +462,23 @@ def create_menus(fparea):
     saveas_item.show()
     quit_item.show()
 
+    edit_menu = gtk.Menu()
+    fp_settings_item = gtk.MenuItem("Footprint settings")
+    fp_settings_item.connect("activate", do_fp_settings, fparea)
+    edit_menu.append(fp_settings_item)
+    fp_settings_item.show()
+    edit_menu.show()
+
     menu_bar = gtk.MenuBar()
     menu_bar.show()
     file_item = gtk.MenuItem("File")
-    file_item.show()
     file_item.set_submenu(file_menu)
+    file_item.show()
+    edit_item = gtk.MenuItem("Edit")
+    edit_item.set_submenu(edit_menu)
+    edit_item.show()
     menu_bar.append(file_item)
+    menu_bar.append(edit_item)
 
     return menu_bar
 
