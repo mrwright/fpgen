@@ -4,7 +4,10 @@ import gtk
 import math
 
 from numbering import ALL_NUMBERINGS, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
-from ui_utils import configuration_widget_items, configuration_widget, reconfigure
+from ui_utils import (
+    configuration_widget_items, configuration_widget, reconfigure,
+    NumberEntry, StringEntry
+)
 
 class Primitive(object):
     def __init__(self, object_manager, number=None, clearance=None, mask=None):
@@ -296,11 +299,11 @@ class Pad(TileablePrimitive):
     def reconfiguration_widget(self):
         return configuration_widget(
             [
-                ("Number", int, self._number),
-                ("Clearance", float, self._clearance),
-                ("Mask", float, self._mask),
+                ("Number", StringEntry(), self._number),
+                ("Clearance", NumberEntry(float, allow_neg=False), self._clearance),
+                ("Mask", NumberEntry(float, allow_neg=False), self._mask),
             ]
-        )
+        ), None
 
     def reconfigure(self, widget, other_widgets):
         (self._number,
@@ -466,11 +469,11 @@ class Ball(TileablePrimitive):
     def reconfiguration_widget(self):
         return configuration_widget(
             [
-                ("Number", int, self._number),
-                ("Clearance", float, self._clearance),
-                ("Mask", float, self._mask),
+                ("Number", StringEntry(), self._number),
+                ("Clearance", NumberEntry(float, allow_neg=False), self._clearance),
+                ("Mask", NumberEntry(float, allow_neg=False), self._mask),
             ]
-        )
+        ), None
 
     def reconfigure(self, widget, other_widgets):
         (self._number,
@@ -764,11 +767,15 @@ class DistanceConstraint(TwoPointConstraint):
         # widget.connect("clicked", lambda x: win2.destroy())
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
-        result = dialog.run()
-        if result == 1:
-            result = float(entry1.get_text())
-        else:
-            result = False
+        while True:
+            result = dialog.run()
+            if result == 1:
+                if not entry1.valid():
+                    continue
+                result = entry1.val()
+            else:
+                result = False
+            break
         dialog.destroy()
         obj_list = list(objects)
 
@@ -924,17 +931,22 @@ class MarkedLine(Primitive):
         dialog = gtk.Dialog("Horizontal distance")
         widget, entry_widgets = configuration_widget(
             [
-                ("Fraction", float, "0.5"),
+                # TODO: allow it to be clamped between 0 and 1.
+                ("Fraction", NumberEntry(float), "0.5"),
             ]
         )
         dialog.get_content_area().add(widget)
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
-        result = dialog.run()
-        if result == 1:
-            result = float(entry_widgets[0].get_text())
-        else:
-            result = False
+        while True:
+            result = dialog.run()
+            if result == 1:
+                if not entry_widgets[0].valid():
+                    continue
+                result = entry_widgets[0].val()
+            else:
+                result = False
+            break
         dialog.destroy()
 
         return result
@@ -942,9 +954,9 @@ class MarkedLine(Primitive):
     def reconfiguration_widget(self):
         return configuration_widget(
             [
-                ("Fraction", float, self._fraction),
+                ("Fraction", NumberEntry(float), self._fraction),
             ]
-        )
+        ), None
 
     def reconfigure(self, widget, other_widgets):
         (fraction, ) = reconfigure(other_widgets)
@@ -1093,24 +1105,32 @@ class Array(Primitive):
         dialog = gtk.Dialog("Enter dimensions")
         widget, entry_widgets = configuration_widget(
             [
-                ("# of elements (x)", int, None),
-                ("# of elements (y)", int, None),
+                ("# of elements (x)",
+                 NumberEntry(int, allow_neg=False, allow_zero=False),
+                 None),
+                ("# of elements (y)",
+                 NumberEntry(int, allow_neg=False, allow_zero=False),
+                 None),
             ]
         )
         dialog.get_content_area().add(widget)
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
-        result = dialog.run()
-        entry1, entry2 = tuple(entry_widgets)
-        if result == 1:
-            x = int(entry1.get_text())
-            y = int(entry2.get_text())
-            result = dict(
-                nx=x,
-                ny=y,
-            )
-        else:
-            result = False
+        while True:
+            result = dialog.run()
+            if result == 1:
+                if not all(widget.valid() for widget in entry_widgets):
+                    continue
+                entry1, entry2 = tuple(entry_widgets)
+                x = entry1.val()
+                y = entry2.val()
+                result = dict(
+                    nx=x,
+                    ny=y,
+                )
+            else:
+                result = False
+            break
         dialog.destroy()
 
         return result
@@ -1149,8 +1169,8 @@ class Array(Primitive):
             return table, widgetlist
 
         fields = [
-            ("Clearance", int, self._clearance),
-            ("Mask", int, self._mask),
+            ("Clearance", NumberEntry(float, allow_neg=False), self._clearance),
+            ("Mask", NumberEntry(float, allow_neg=False), self._mask),
         ]
         n = len(fields)
 
@@ -1195,11 +1215,11 @@ class Array(Primitive):
 
         combo.connect("changed", changed_cb)
 
-        return reconfiguration_widget, (
+        return (reconfiguration_widget, (
             combo,
             numbering_widgets,
             widgetlist,
-        )
+        )), lambda : True
 
     def reconfigure(self, widget, other_widgets):
         def get_value(ty, widget):

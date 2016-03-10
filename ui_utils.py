@@ -2,12 +2,74 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 
+ERROR_COLOR = gtk.gdk.Color(65535, 0, 0)
+
+class ValidatingEntry(gtk.Entry):
+    def mark_invalid(self):
+        self.modify_base(gtk.STATE_NORMAL, ERROR_COLOR)
+
+    def mark_valid(self):
+        self.modify_base(gtk.STATE_NORMAL, None)
+
+    def valid(self):
+        return NotImplementedError()
+
+    def validate(self):
+        if self.valid():
+            self.mark_valid()
+        else:
+            self.mark_invalid()
+
+class NumberEntry(ValidatingEntry):
+    def __init__(self, number_cls, allow_neg=True, allow_zero=True, allow_empty=False):
+        super(NumberEntry, self).__init__()
+        self._number_cls = number_cls
+        self._allow_neg = allow_neg
+        self._allow_zero = allow_zero
+        self._allow_empty = allow_empty
+        self.connect("focus_out_event",
+                     lambda _, __ : self.validate())
+        self.connect("focus_in_event",
+                     lambda _, __ : self.mark_valid())
+
+    def valid(self):
+        text = self.get_text()
+        if text == '':
+            return self._allow_empty
+        try:
+            val = self._number_cls(text)
+        except ValueError:
+            return False
+
+        if val < 0:
+            return self._allow_neg
+        elif val == 0:
+            return self._allow_zero
+        else:
+            return True
+
+    def val(self):
+        assert self.valid()
+        if self.get_text() == '':
+            return None
+        else:
+            return self._number_cls(self.get_text())
+
+class StringEntry(ValidatingEntry):
+    def __init__(self, allow_empty=True):
+        super(StringEntry, self).__init__()
+        self._allow_empty = allow_empty
+
+    def valid(self):
+        return bool(self.get_text()) or self._allow_empty
+
+    def val(self):
+        return self.get_text()
+
 def configuration_widget_items(fields):
     widgets = []
-    for label, itemty, itemdefault in fields:
+    for label, entry_widget, itemdefault in fields:
         label_widget = gtk.Label(label + ": ")
-        # TODO: other types
-        entry_widget = gtk.Entry()
         if itemdefault is not None:
             entry_widget.set_text(str(itemdefault))
         label_widget.show()

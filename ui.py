@@ -10,24 +10,30 @@ from object_manager import ObjectManager
 from primitives import (Pad, Coincident, MarkedLine, Horizontal, Vertical, CenterPoint,
                         PadArray, BallArray, HorizDistance, VertDistance, Ball)
 from geda_out import GedaOut
-from ui_utils import configuration_widget
+from ui_utils import configuration_widget, NumberEntry, StringEntry
 
 def do_configuration(primitive):
     print("Reconfigure %r" % primitive)
     dialog = gtk.Dialog("Configure")
-    (widget, widgets) = primitive.reconfiguration_widget()
+    ((widget, widgets), validator) = primitive.reconfiguration_widget()
+    if not validator:
+        validator = lambda: all(widget.valid() for widget in widgets)
     dialog.get_content_area().add(widget)
     dialog.add_button("Ok", 1)
     dialog.add_button("Cancel", 2)
     parent = primitive.parent()
     if parent is not None:
         dialog.add_button("Edit parent", 3)
-    result = dialog.run()
-    if result == 1:
-        primitive.reconfigure(widget, widgets)
-    dialog.destroy()
-    if result == 3:
-        do_configuration(parent)
+    while True:
+        result = dialog.run()
+        if result == 1:
+            if not validator():
+                continue
+            primitive.reconfigure(widget, widgets)
+        dialog.destroy()
+        if result == 3:
+            do_configuration(parent)
+        break
 
 class FPArea(gtk.DrawingArea):
     # TODO: this class should really be a standalone file area viewer with a better
@@ -423,24 +429,29 @@ def do_fp_settings(_, fparea):
     dialog = gtk.Dialog("Footprint settings")
     widget, entry_widgets = configuration_widget(
         [
-            ("Clearance", float, fparea.object_manager.default_clearance),
-            ("Mask", float, fparea.object_manager.default_mask),
+            ("Clearance",
+             NumberEntry(float, allow_neg=False),
+             fparea.object_manager.default_clearance),
+            ("Mask",
+             NumberEntry(float, allow_neg=False),
+             fparea.object_manager.default_mask),
         ]
     )
     dialog.get_content_area().add(widget)
     dialog.add_button("Ok", 1)
     dialog.add_button("Cancel", 2)
-    result = dialog.run()
-    if result == 1:
-        entry1, entry2 = tuple(entry_widgets)
-        clearance = float(entry1.get_text())
-        mask = float(entry2.get_text())
-        fparea.object_manager.default_clearance = clearance
-        fparea.object_manager.default_mask = mask
+    while True:
+        result = dialog.run()
+        if result == 1:
+            if not all(widget.valid() for widget in entry_widgets):
+                continue
+            entry1, entry2 = tuple(entry_widgets)
+            clearance = entry1.val()
+            mask = entry2.val()
+            fparea.object_manager.default_clearance = clearance
+            fparea.object_manager.default_mask = mask
+        break
     dialog.destroy()
-
-    return result
-
 
 def create_menus(fparea):
     accel_group = gtk.AccelGroup()
