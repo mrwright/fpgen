@@ -937,7 +937,10 @@ class MarkedLine(Primitive):
         widget, entry_widgets = configuration_widget(
             [
                 # TODO: allow it to be clamped between 0 and 1.
-                ("Fraction", NumberEntry(float), "0.5"),
+                ("Fraction", NumberEntry(float,
+                                         allow_neg=False,
+                                         allow_zero=True,
+                                         max_val=1), "0.5"),
             ]
         )
         dialog.get_content_area().add(widget)

@@ -31,12 +31,13 @@ class ValidatingEntry(gtk.Entry):
 
 class NumberEntry(ValidatingEntry):
     def __init__(self, number_cls, allow_neg=True, allow_zero=True,
-                 allow_empty=False):
+                 allow_empty=False, max_val=None):
         super(NumberEntry, self).__init__()
         self._number_cls = number_cls
         self._allow_neg = allow_neg
         self._allow_zero = allow_zero
         self._allow_empty = allow_empty
+        self._max_val = max_val
 
     def valid(self):
         text = self.get_text()
@@ -51,6 +52,8 @@ class NumberEntry(ValidatingEntry):
             return self._allow_neg
         elif val == 0:
             return self._allow_zero
+        elif self._max_val:
+            return val <= self._max_val
         else:
             return True
 
