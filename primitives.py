@@ -6,14 +6,11 @@ import math
 from numbering import ALL_NUMBERINGS, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
 from ui_utils import (
     configuration_widget_items, configuration_widget, reconfigure,
-    NumberEntry, StringEntry
+    NumberEntry, StringEntry, UnitNumberEntry,
 )
 
 class Primitive(object):
     def __init__(self, object_manager, number=None, clearance=None, mask=None):
-        # TODO: active and selected should be parameters to draw, not properties.
-        self._active = False
-        self._selected = False
         self._clearance = clearance
         self._mask = mask
         self._object_manager = object_manager
@@ -755,18 +752,17 @@ class DistanceConstraint(TwoPointConstraint):
             dialog = gtk.Dialog("Horizontal distance")
         else:
             dialog = gtk.Dialog("Vertical distance")
-        array = gtk.Table(1, 2)
-        label1 = gtk.Label("Distance: ")
-        array.attach(label1, 0, 1, 0, 1)
-        entry1 = gtk.Entry()
-        array.attach(entry1, 1, 2, 0, 1)
-        label1.show()
-        entry1.show()
-        array.show()
-        dialog.get_content_area().add(array)
-        # widget.connect("clicked", lambda x: win2.destroy())
+        widget, entry_widgets = configuration_widget(
+            [
+                ("Distance",
+                 UnitNumberEntry(allow_neg=False),
+                 None),
+            ]
+        )
+        dialog.get_content_area().add(widget)
         dialog.add_button("Ok", 1)
         dialog.add_button("Cancel", 2)
+        entry1 = entry_widgets[0]
         while True:
             result = dialog.run()
             if result == 1:
@@ -777,6 +773,8 @@ class DistanceConstraint(TwoPointConstraint):
                 result = False
             break
         dialog.destroy()
+        if not result:
+            return False
         obj_list = list(objects)
 
         return dict(
@@ -785,14 +783,18 @@ class DistanceConstraint(TwoPointConstraint):
             p2=obj_list[1],
         )
 
+    # TODO: reconfigure.
+
     def constraints(self):
         if self.horiz:
             return [
-                ([(self.p2.point(), 1, 0), (self.p1.point(), -1, 0)], self.distance)
+                ([(self.p2.point(), 1, 0), (self.p1.point(), -1, 0)],
+                 self.distance.to_iu())
             ]
         else:
             return [
-                ([(self.p2.point(), 0, 1), (self.p1.point(), 0, -1)], self.distance)
+                ([(self.p2.point(), 0, 1), (self.p1.point(), 0, -1)],
+                 self.distance.to_iu())
             ]
 
     def draw(self, cr, active, selected):
@@ -853,9 +855,12 @@ class DistanceConstraint(TwoPointConstraint):
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
-        p1, p2 = tuple([object_manager.primitives[idx] for idx in dictionary['points']])
+        p1, p2 = tuple([object_manager.primitives[idx]
+                        for idx in dictionary['points']])
         return cls(object_manager,
-                   p1, p2, dictionary['distance'], dictionary['label_distance']
+                   p1, p2,
+                   dictionary['distance'],
+                   dictionary['label_distance']
         )
 
 class HorizDistance(DistanceConstraint):

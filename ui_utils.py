@@ -2,9 +2,18 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 
+from units import UnitNumber, UNITS
+
 ERROR_COLOR = gtk.gdk.Color(65535, 0, 0)
 
 class ValidatingEntry(gtk.Entry):
+    def __init__(self):
+        super(ValidatingEntry, self).__init__()
+        self.connect("focus_out_event",
+                     lambda _, __ : self.validate())
+        self.connect("focus_in_event",
+                     lambda _, __ : self.mark_valid())
+
     def mark_invalid(self):
         self.modify_base(gtk.STATE_NORMAL, ERROR_COLOR)
 
@@ -21,16 +30,13 @@ class ValidatingEntry(gtk.Entry):
             self.mark_invalid()
 
 class NumberEntry(ValidatingEntry):
-    def __init__(self, number_cls, allow_neg=True, allow_zero=True, allow_empty=False):
+    def __init__(self, number_cls, allow_neg=True, allow_zero=True,
+                 allow_empty=False):
         super(NumberEntry, self).__init__()
         self._number_cls = number_cls
         self._allow_neg = allow_neg
         self._allow_zero = allow_zero
         self._allow_empty = allow_empty
-        self.connect("focus_out_event",
-                     lambda _, __ : self.validate())
-        self.connect("focus_in_event",
-                     lambda _, __ : self.mark_valid())
 
     def valid(self):
         text = self.get_text()
@@ -65,6 +71,24 @@ class StringEntry(ValidatingEntry):
 
     def val(self):
         return self.get_text()
+
+class UnitNumberEntry(ValidatingEntry):
+    def __init__(self, allow_neg=True):
+        super(UnitNumberEntry, self).__init__()
+        self._allow_neg = allow_neg
+
+    def valid(self):
+        text = self.get_text()
+        try:
+            val = UnitNumber.from_str(text)
+        except ValueError:
+            return False
+
+        return val.value >= 0 or self._allow_neg
+
+    def val(self):
+        assert self.valid()
+        return UnitNumber.from_str(self.get_text())
 
 def configuration_widget_items(fields):
     widgets = []

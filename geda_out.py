@@ -6,7 +6,7 @@ class GedaOut(object):
         mask = float(ball.mask()) * 2
         clearance = float(ball.clearance()) * 2
 
-        print """Pad [ {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm "{}" "{}" "" ]""".format(
+        print """Pad [ {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil "{}" "{}" "" ]""".format(
             ball.x, ball.y, ball.x, ball.y,
             ball.r*2, # Thickness
             clearance, # Clearance
@@ -21,7 +21,7 @@ class GedaOut(object):
             x0 = pad.x0 + pad.h/2.
             x1 = pad.x1 - pad.h/2.
             y = (pad.y0 + pad.y1)/2.
-            print """Pad [{:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm "" "{}" 0x4101]""".format(
+            print """Pad [{:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil "" "{}" 0x4101]""".format(
                 x0, y, x1, y,
                 pad.h, # Thickness
                 clearance, # Clearance
@@ -31,7 +31,7 @@ class GedaOut(object):
             y0 = pad.y0 + pad.w/2.
             y1 = pad.y1 - pad.w/2.
             x = (pad.x0 + pad.x1)/2.
-            print """Pad [{:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm {:.6f}mm "" "{}" 0x4101]""".format(
+            print """Pad [{:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil "" "{}" 0x4101]""".format(
                 x, y0, x, y1,
                 pad.w, # Thickness
                 clearance, # Clearance
@@ -41,7 +41,7 @@ class GedaOut(object):
 
     @staticmethod
     def write(primitive_list):
-        print """Element [0x00 "bga_15" "" "" 0.000000mm 0.000000mm 0.000000mm 0.000000mm 0 100 0x00]"""
+        print """Element [0x00 "bga_15" "" "" 0.000000mil 0.000000mil 0.000000mil 0.000000mil 0 100 0x00]"""
         print "("
         functab = [
             (Ball, GedaOut.write_ball),
