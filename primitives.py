@@ -297,8 +297,8 @@ class Pad(TileablePrimitive):
         return configuration_widget(
             [
                 ("Number", StringEntry(), self._number),
-                ("Clearance", NumberEntry(float, allow_neg=False), self._clearance),
-                ("Mask", NumberEntry(float, allow_neg=False), self._mask),
+                ("Clearance", UnitNumberEntry(allow_empty=True), self._clearance),
+                ("Mask", UnitNumberEntry(allow_empty=True), self._mask),
             ]
         ), None
 
@@ -467,8 +467,8 @@ class Ball(TileablePrimitive):
         return configuration_widget(
             [
                 ("Number", StringEntry(), self._number),
-                ("Clearance", NumberEntry(float, allow_neg=False), self._clearance),
-                ("Mask", NumberEntry(float, allow_neg=False), self._mask),
+                ("Clearance", UnitNumberEntry(allow_empty=True), self._clearance),
+                ("Mask", UnitNumberEntry(allow_empty=True), self._mask),
             ]
         ), None
 
@@ -783,18 +783,28 @@ class DistanceConstraint(TwoPointConstraint):
             p2=obj_list[1],
         )
 
-    # TODO: reconfigure.
+    def reconfiguration_widget(self):
+        return configuration_widget(
+            [
+                ("Distance",
+                 UnitNumberEntry(allow_neg=True),
+                 self.distance),
+            ]
+        ), None
+
+    def reconfigure(self, widget, other_widgets):
+        (self.distance, ) = reconfigure(other_widgets)
 
     def constraints(self):
         if self.horiz:
             return [
                 ([(self.p2.point(), 1, 0), (self.p1.point(), -1, 0)],
-                 self.distance.to_iu())
+                 self.distance.to("iu"))
             ]
         else:
             return [
                 ([(self.p2.point(), 0, 1), (self.p1.point(), 0, -1)],
-                 self.distance.to_iu())
+                 self.distance.to("iu"))
             ]
 
     def draw(self, cr, active, selected):
@@ -912,6 +922,7 @@ class Coincident(TwoPointConstraint):
 
 class MarkedLine(Primitive):
     NAME = "Marked line"
+    ZORDER = 1
 
     def __init__(self, object_manager, points, fraction):
         super(MarkedLine, self).__init__(object_manager)
@@ -962,13 +973,15 @@ class MarkedLine(Primitive):
     def reconfiguration_widget(self):
         return configuration_widget(
             [
-                ("Fraction", NumberEntry(float), self._fraction),
+                ("Fraction", NumberEntry(float,
+                                         allow_neg=False,
+                                         allow_zero=True,
+                                         max_val=1), self._fraction),
             ]
         ), None
 
     def reconfigure(self, widget, other_widgets):
-        (fraction, ) = reconfigure(other_widgets)
-        self._fraction = float(fraction)
+        (self._fraction, ) = reconfigure(other_widgets)
 
     @classmethod
     def can_create(self, objects):
@@ -1151,34 +1164,27 @@ class Array(Primitive):
             else:
                 table = gtk.VBox()
             widgetlist = []
-            for idx, (fieldname, fieldtype, fielddefault) in enumerate(fields):
+            for idx, (fieldname, fieldwidget, fielddefault
+            ) in enumerate(fields):
                 fieldlabel = gtk.Label(fieldname + ": ")
                 fieldlabel.show()
-                if fieldtype == int or fieldtype == str:
-                    fieldwidget = gtk.Entry()
-                    if fielddefault is not None:
-                        if fielddefault is NUMBER_CONST_WIDTH:
-                            fieldwidget.set_text(str(self.nx))
-                        elif fielddefault is NUMBER_CONST_HEIGHT:
-                            fieldwidget.set_text(str(self.ny))
-                        else:
-                            fieldwidget.set_text(str(fielddefault))
-                elif fieldtype == bool:
-                    fieldwidget = gtk.ToggleButton("Enable")
-                    if fielddefault is not None:
-                        fieldwidget.set_active(fielddefault)
-                else:
-                    raise NotImplementedError("Type was %r" % (fieldtype, ))
+                if fielddefault is not None:
+                    if fielddefault is NUMBER_CONST_WIDTH:
+                        fieldwidget.set_val(self.nx)
+                    elif fielddefault is NUMBER_CONST_HEIGHT:
+                            fieldwidget.set_val(self.ny)
+                    else:
+                        fieldwidget.set_val(fielddefault)
                 fieldwidget.show()
                 table.attach(fieldlabel, 0, 1, idx, idx + 1)
                 table.attach(fieldwidget, 1, 2, idx, idx + 1)
 
-                widgetlist.append((fieldwidget, fieldtype))
+                widgetlist.append(fieldwidget)
             return table, widgetlist
 
         fields = [
-            ("Clearance", NumberEntry(float, allow_neg=False), self._clearance),
-            ("Mask", NumberEntry(float, allow_neg=False), self._mask),
+            ("Clearance", UnitNumberEntry(allow_empty=True), self._clearance),
+            ("Mask", UnitNumberEntry(allow_empty=True), self._mask),
         ]
         n = len(fields)
 
@@ -1205,7 +1211,8 @@ class Array(Primitive):
             if numbering_class.applies(self.nx, self.ny):
                 combo.append_text(numbering_text)
 
-                numbering_widgets.append((numbering_class, widget_for(numbering_class)))
+                numbering_widgets.append((numbering_class,
+                                          widget_for(numbering_class)))
         combo.set_active(0)
         combo.show()
         numbering_box.pack_start(combo, False, False, 0)
@@ -1230,20 +1237,12 @@ class Array(Primitive):
         )), lambda : True
 
     def reconfigure(self, widget, other_widgets):
-        def get_value(ty, widget):
-            if ty == str:
-                return widget.get_text()
-            elif ty == int:
-                return int(widget.get_text()) # TODO: error checking?
-            elif ty == bool:
-                return widget.get_active()
         combobox, ALL_NUMBERINGS, reconf_widgetlist = other_widgets
         idx = combobox.get_active()
         numbering_class, (_, widgetlist) = ALL_NUMBERINGS[idx]
         print numbering_class, widgetlist
         vals = [
-            get_value(ty, widget)
-            for widget, ty in widgetlist
+            widget.val() for widget in widgetlist
         ]
         self.numbering = numbering_class.new(
             self.nx, self.ny, vals

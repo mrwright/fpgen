@@ -12,7 +12,11 @@ from primitives import PRIMITIVE_TYPES
 
 
 class ObjectManager(object):
-    def __init__(self, default_clearance, default_mask):
+    def __init__(self, fp_name, default_clearance, default_mask):
+        self.fp_name = fp_name
+        self.default_clearance = default_clearance
+        self.default_mask = default_mask
+
         # Points are each assigned a number; next_point_idx contains the number
         # to assign to the next point we allocate.
         self._next_point_idx = 0
@@ -42,8 +46,6 @@ class ObjectManager(object):
         self.constraining_primitives = []
         # Map from each primitive to its parent.
         self.parent_map = {}
-        self.default_clearance = default_clearance
-        self.default_mask = default_mask
         self.degrees_of_freedom = 0
 
     def to_dict(self):
@@ -55,6 +57,7 @@ class ObjectManager(object):
             primitive_dict=primitive.to_dict()
         ) for idx, primitive in enumerate(self.primitives)]
         return dict(
+            fp_name=self.fp_name,
             default_mask=self.default_mask,
             default_clearance=self.default_clearance,
             next_point_idx=self._next_point_idx,
@@ -64,13 +67,17 @@ class ObjectManager(object):
             draw_primitives=[self.primitive_idx(primitive)
                              for primitive in self.draw_primitives],
             constraining_primitives=[self.primitive_idx(primitive)
-                                     for primitive in self.constraining_primitives]
+                                     for primitive
+                                       in self.constraining_primitives]
         )
 
     @staticmethod
     def from_dict(dictionary):
-        object_manager = ObjectManager(dictionary['default_clearance'],
-                                       dictionary['default_mask'])
+        object_manager = ObjectManager(
+            dictionary['fp_name'],
+            dictionary['default_clearance'],
+            dictionary['default_mask']
+        )
         object_manager._all_points = set(dictionary['all_points'])
         object_manager._point_lru = dictionary['all_points']
         object_manager._next_point_idx = dictionary['next_point_idx']

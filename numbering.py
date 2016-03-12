@@ -1,4 +1,10 @@
-# This file contains various pin/pad/ball numbering schemes we might want to use.
+# This file contains various pin/pad/ball numbering schemes we might want to
+# use.
+
+from ui_utils import (
+    BoolEntry,
+    NumberEntry,
+)
 
 class _NUMBER_CONST_WIDTH(object):
     pass
@@ -84,9 +90,9 @@ class OneDNumberRange(Numbering):
     @classmethod
     def fields(cls):
         return [
-            ("Starting index", int, 1),
-            ("Increment", int, 1),
-            ("Reversed", bool, False),
+            ("Starting index", NumberEntry(int), 1),
+            ("Increment", NumberEntry(int), 1),
+            ("Reversed", BoolEntry(), False),
         ]
 
     @classmethod
@@ -123,9 +129,9 @@ class OneDLetterRange(OneDNumberRange):
     @classmethod
     def fields(cls):
         return [
-            ("Starting letter index", int, None),
-            ("Increment", int, 1),
-            ("Reversed", bool, False),
+            ("Starting index", NumberEntry(int), 1),
+            ("Increment", NumberEntry(int), 1),
+            ("Reversed", BoolEntry(), False),
         ]
 
 class TwoDNumbers(Numbering):
@@ -154,13 +160,13 @@ class TwoDNumbers(Numbering):
     @classmethod
     def fields(cls):
         return [
-            ("Starting index", int, 1),
-            ("Increment (x)", int, 1),
-            ("Increment (y)", int, NUMBER_CONST_WIDTH),
-            ("Reversed (x)", bool, False),
-            ("Reversed (y)", bool, False),
-            ("Zigzag (x)", bool, False),
-            ("Zigzag (y)", bool, False),
+            ("Starting index", NumberEntry(int), 1),
+            ("Increment (x)", NumberEntry(int), 1),
+            ("Increment (y)", NumberEntry(int), NUMBER_CONST_WIDTH),
+            ("Reversed (x)", BoolEntry(), False),
+            ("Reversed (y)", BoolEntry(), False),
+            ("Zigzag (x)", BoolEntry(), False),
+            ("Zigzag (y)", BoolEntry(), False),
         ]
 
     @classmethod

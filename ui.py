@@ -6,11 +6,33 @@ import gtk
 import itertools
 import json
 
+from defaults import (
+    DEFAULT_DEFAULT_CLEARANCE_MILS,
+    DEFAULT_DEFAULT_MASK_MILS,
+)
 from object_manager import ObjectManager
-from primitives import (Pad, Coincident, MarkedLine, Horizontal, Vertical, CenterPoint,
-                        PadArray, BallArray, HorizDistance, VertDistance, Ball)
+from primitives import (
+    Ball,
+    BallArray,
+    CenterPoint,
+    Coincident,
+    HorizDistance,
+    Horizontal,
+    MarkedLine,
+    Pad,
+    PadArray,
+    VertDistance,
+    Vertical,
+)
 from geda_out import GedaOut
-from ui_utils import configuration_widget, NumberEntry, StringEntry
+from ui_utils import (
+    configuration_widget,
+    NumberEntry,
+    StringEntry,
+    UnitNumberEntry,
+    BoolEntry,
+)
+from units import UnitNumber
 
 def do_configuration(primitive):
     print("Reconfigure %r" % primitive)
@@ -74,7 +96,12 @@ class FPArea(gtk.DrawingArea):
         self.pixmap = None
         # Whether we're currently in the middle of a drag.
         self.dragging = False
-        self.object_manager = ObjectManager(6, 2)
+        self.object_manager = ObjectManager(
+            fp_name = "",
+            default_clearance = UnitNumber(DEFAULT_DEFAULT_CLEARANCE_MILS,
+                                           'mil'),
+            default_mask = UnitNumber(DEFAULT_DEFAULT_MASK_MILS, 'mil')
+        )
         self.active_object = None
         self.dragging_object = None
         self.selected_primitives = set()
@@ -162,7 +189,7 @@ class FPArea(gtk.DrawingArea):
         elif keyname == 'q':
             exit()
         elif keyname == 'w':
-            GedaOut.write(self.object_manager.primitives)
+            GedaOut.write(self.object_manager)
         elif keyname == 'r':
             if self.active_object:
                 do_configuration(self.active_object)
@@ -429,11 +456,14 @@ def do_fp_settings(_, fparea):
     dialog = gtk.Dialog("Footprint settings")
     widget, entry_widgets = configuration_widget(
         [
+            ("Name",
+             StringEntry(),
+             fparea.object_manager.fp_name),
             ("Clearance",
-             NumberEntry(float, allow_neg=False),
+             UnitNumberEntry(),
              fparea.object_manager.default_clearance),
             ("Mask",
-             NumberEntry(float, allow_neg=False),
+             UnitNumberEntry(allow_empty=True),
              fparea.object_manager.default_mask),
         ]
     )
@@ -445,9 +475,10 @@ def do_fp_settings(_, fparea):
         if result == 1:
             if not all(widget.valid() for widget in entry_widgets):
                 continue
-            entry1, entry2 = tuple(entry_widgets)
-            clearance = entry1.val()
-            mask = entry2.val()
+            fp_name = entry_widgets[0].val()
+            clearance = entry_widgets[1].val()
+            mask = entry_widgets[2].val()
+            fparea.object_manager.fp_name = fp_name
             fparea.object_manager.default_clearance = clearance
             fparea.object_manager.default_mask = mask
         break

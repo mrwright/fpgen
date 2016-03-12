@@ -3,8 +3,8 @@ from primitives import Pad, Ball
 class GedaOut(object):
     @staticmethod
     def write_ball(ball):
-        mask = float(ball.mask()) * 2
-        clearance = float(ball.clearance()) * 2
+        mask = float(ball.mask().to("mil")) * 2
+        clearance = float(ball.clearance().to("mil")) * 2
 
         print """Pad [ {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil "{}" "{}" "" ]""".format(
             ball.x, ball.y, ball.x, ball.y,
@@ -15,8 +15,8 @@ class GedaOut(object):
 
     @staticmethod
     def write_pad(pad):
-        mask = float(pad.mask()) * 2
-        clearance = float(pad.clearance()) * 2
+        mask = float(pad.mask().to("mil")) * 2
+        clearance = float(pad.clearance().to("mil")) * 2
         if pad.w > pad.h:
             x0 = pad.x0 + pad.h/2.
             x1 = pad.x1 - pad.h/2.
@@ -40,8 +40,10 @@ class GedaOut(object):
 
 
     @staticmethod
-    def write(primitive_list):
-        print """Element [0x00 "bga_15" "" "" 0.000000mil 0.000000mil 0.000000mil 0.000000mil 0 100 0x00]"""
+    def write(object_manager):
+        fp_name = object_manager.fp_name
+        primitive_list = object_manager.primitives
+        print """Element [0x00 "{}" "{}" "{}" 0.000000mil 0.000000mil 0.000000mil 0.000000mil 0 100 0x00]""".format(fp_name, fp_name, fp_name)
         print "("
         functab = [
             (Ball, GedaOut.write_ball),

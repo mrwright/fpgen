@@ -59,5 +59,6 @@ class UnitNumber(object):
     def __str__(self):
         return "{} {}".format(self._value, self._unit)
 
-    def to_iu(self):
-        return self._value * UNITS[self._unit]
+    def to(self, unit):
+        assert unit in UNITS
+        return self._value * UNITS[self._unit] / UNITS[unit]
