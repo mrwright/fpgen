@@ -3,11 +3,20 @@ pygtk.require('2.0')
 import gtk
 import math
 
-from numbering import ALL_NUMBERINGS, NUMBER_CONST_HEIGHT, NUMBER_CONST_WIDTH
-from ui_utils import (
-    configuration_widget_items, configuration_widget, reconfigure,
-    NumberEntry, StringEntry, UnitNumberEntry,
+from numbering import (
+    ALL_NUMBERINGS,
+    NUMBER_CONST_HEIGHT,
+    NUMBER_CONST_WIDTH,
 )
+from ui_utils import (
+    NumberEntry,
+    StringEntry,
+    UnitNumberEntry,
+    configuration_widget,
+    configuration_widget_items,
+    reconfigure,
+)
+from units import UnitNumber
 
 class Primitive(object):
     def __init__(self, object_manager, number=None, clearance=None, mask=None):
@@ -266,7 +275,8 @@ class TileablePrimitive(Primitive):
 class Pad(TileablePrimitive):
     NAME = "Pad"
 
-    def __init__(self, object_manager, points, number=None, clearance=None, mask=None):
+    def __init__(self, object_manager, points, number=None,
+                 clearance=None, mask=None):
         super(Pad, self).__init__(object_manager, number, clearance, mask)
         self.points = points
 
@@ -297,8 +307,10 @@ class Pad(TileablePrimitive):
         return configuration_widget(
             [
                 ("Number", StringEntry(), self._number),
-                ("Clearance", UnitNumberEntry(allow_empty=True), self._clearance),
-                ("Mask", UnitNumberEntry(allow_empty=True), self._mask),
+                ("Clearance", UnitNumberEntry(allow_empty=True),
+                 self._clearance),
+                ("Mask", UnitNumberEntry(allow_empty=True),
+                 self._mask),
             ]
         ), None
 
@@ -408,7 +420,8 @@ class Pad(TileablePrimitive):
             point.drag(offs_x, offs_y)
 
     def dimensions_to_constrain(self, multiplier=1):
-        # When in an array, we want the height and width of all pads to be equal.
+        # When in an array, we want the height and width of all pads to
+        # be equal.
         return [[(self.p(0, 0), multiplier, 0),
                  (self.p(2, 0), -multiplier, 0)],
                 [(self.p(0, 0), 0, multiplier),
@@ -425,28 +438,35 @@ class Pad(TileablePrimitive):
             points=point_indices,
             deps=point_indices,
             number=self._number,
-            clearance=self._clearance,
-            mask=self._mask,
+            clearance=self._clearance.to_dict() if self._clearance else None,
+            mask=self._mask.to_dict() if self._clearance else None,
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
-        return cls(object_manager,
-                   [object_manager.primitives[idx] for idx in dictionary['points']],
-                   dictionary['number'],
-                   dictionary['clearance'],
-                   dictionary['mask'])
+        clearance = dictionary['clearance']
+        mask = dictionary['mask']
+        return cls(
+            object_manager,
+            [object_manager.primitives[idx]
+             for idx in dictionary['points']],
+            dictionary['number'],
+            UnitNumber.from_dict(clearance) if clearance else None,
+            UnitNumber.from_dict(mask) if mask else None
+        )
 
 class Ball(TileablePrimitive):
     NAME = "Ball"
 
-    def __init__(self, object_manager, points, number=None):
-        super(Ball, self).__init__(object_manager, number)
+    def __init__(self, object_manager, points, number=None,
+                 clearance=None, mask=None):
+        super(Ball, self).__init__(object_manager, number, clearance, mask)
         self.points = points
 
     @classmethod
     def new(cls, object_manager, x, y, configuration, r=20):
-        # Five points: the center point, and four at the compass points around it.
+        # Five points: the center point, and four at the compass points
+        # around it.
         points = [
             Point.new(object_manager, x, y - r/2),
             Point.new(object_manager, x - r/2, y),
@@ -467,8 +487,10 @@ class Ball(TileablePrimitive):
         return configuration_widget(
             [
                 ("Number", StringEntry(), self._number),
-                ("Clearance", UnitNumberEntry(allow_empty=True), self._clearance),
-                ("Mask", UnitNumberEntry(allow_empty=True), self._mask),
+                ("Clearance", UnitNumberEntry(allow_empty=True),
+                 self._clearance),
+                ("Mask", UnitNumberEntry(allow_empty=True),
+                 self._mask),
             ]
         ), None
 
@@ -570,7 +592,8 @@ class Ball(TileablePrimitive):
             point.drag(offs_x, offs_y)
 
     def dimensions_to_constrain(self, multiplier=1):
-        # When in an array, we want the height and width of all pads to be equal.
+        # When in an array, we want the height and width of all pads
+        # to be equal.
         return [[(self.p(3), multiplier, 0),
                  (self.p(2), -multiplier, 0)]]
 
@@ -585,17 +608,22 @@ class Ball(TileablePrimitive):
             points=point_indices,
             deps=point_indices,
             number=self._number,
-            clearance=self._clearance,
-            mask=self._mask,
+            clearance=self._clearance.to_dict() if self._clearance else None,
+            mask=self._mask.to_dict() if self._mask else None,
         )
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
-        return cls(object_manager,
-                   [object_manager.primitives[idx] for idx in dictionary['points']],
-                   dictionary['number'],
-                   dictionary['clearance'],
-                   dictionary['mask'])
+        clearance = dictionary['clearance']
+        mask = dictionary['mask']
+        return cls(
+            object_manager,
+            [object_manager.primitives[idx]
+             for idx in dictionary['points']],
+            dictionary['number'],
+            UnitNumber.from_dict(clearance) if clearance else None,
+            UnitNumber.from_dict(mask) if mask else None,
+        )
 
 class TwoPointConstraint(Primitive):
     '''
@@ -858,8 +886,8 @@ class DistanceConstraint(TwoPointConstraint):
     def to_dict(self):
         dictionary = super(DistanceConstraint, self).to_dict()
         dictionary.update(dict(
-            distance=self.distance,
-            label_distance=self.label_distance
+            distance=self.distance.to_dict(),
+            label_distance=self.label_distance,
         ))
         return dictionary
 
@@ -869,7 +897,7 @@ class DistanceConstraint(TwoPointConstraint):
                         for idx in dictionary['points']])
         return cls(object_manager,
                    p1, p2,
-                   dictionary['distance'],
+                   UnitNumber.from_dict(dictionary['distance']),
                    dictionary['label_distance']
         )
 

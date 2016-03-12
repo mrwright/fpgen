@@ -62,3 +62,13 @@ class UnitNumber(object):
     def to(self, unit):
         assert unit in UNITS
         return self._value * UNITS[self._unit] / UNITS[unit]
+
+    def to_dict(self):
+        return dict(
+            value=self._value,
+            unit=self._unit,
+        )
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        return cls(dictionary['value'], dictionary['unit'])

@@ -9,7 +9,7 @@ from numpy import array, dot, vdot, matrix
 from numpy.linalg import inv, matrix_rank
 
 from primitives import PRIMITIVE_TYPES
-
+from units import UnitNumber
 
 class ObjectManager(object):
     def __init__(self, fp_name, default_clearance, default_mask):
@@ -58,8 +58,8 @@ class ObjectManager(object):
         ) for idx, primitive in enumerate(self.primitives)]
         return dict(
             fp_name=self.fp_name,
-            default_mask=self.default_mask,
-            default_clearance=self.default_clearance,
+            default_mask=self.default_mask.to_dict(),
+            default_clearance=self.default_clearance.to_dict(),
             next_point_idx=self._next_point_idx,
             all_points=list(self._all_points),
             point_coords=self._point_coords,
@@ -75,8 +75,8 @@ class ObjectManager(object):
     def from_dict(dictionary):
         object_manager = ObjectManager(
             dictionary['fp_name'],
-            dictionary['default_clearance'],
-            dictionary['default_mask']
+            UnitNumber.from_dict(dictionary['default_clearance']),
+            UnitNumber.from_dict(dictionary['default_mask']),
         )
         object_manager._all_points = set(dictionary['all_points'])
         object_manager._point_lru = dictionary['all_points']
@@ -96,14 +96,17 @@ class ObjectManager(object):
                            for i in primitive_dict.get('deps', [])):
                     continue
                 # At this point, we have a primitive that's ready to be created.
-                primitive_cls = PRIMITIVE_TYPES[primitive_dict['primitive_type']]
+                primitive_cls = PRIMITIVE_TYPES[
+                    primitive_dict['primitive_type']
+                ]
                 primitive = primitive_cls.from_dict(
                     object_manager,
                     primitive_dict['primitive_dict']
                 )
                 object_manager.primitives[primitive_dict['index']] = primitive
         object_manager.draw_primitives = [
-            object_manager.primitives[idx] for idx in dictionary['draw_primitives']
+            object_manager.primitives[idx]
+            for idx in dictionary['draw_primitives']
         ]
         object_manager.constraining_primitives = [
             object_manager.primitives[idx]
@@ -304,8 +307,8 @@ class ObjectManager(object):
         current_mins = {}
 
         # TODO: don't bother building the matrix. We can invert it ourselves,
-        # and the matrix multiplication will probably be faster when it's represented
-        # sparsely.
+        # and the matrix multiplication will probably be faster when it's
+        # represented sparsely.
         for (coeffs, target) in constraints:
             row = [0] * 2 * n
             rowdict = defaultdict(int)
