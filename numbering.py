@@ -172,7 +172,6 @@ class TwoDNumbers(Numbering):
     @classmethod
     def new(cls, w, h, fields):
         assert cls.applies(w, h)
-        max_dim = max(w, h)
         start_idx = fields[0]
         x_increment = fields[1]
         y_increment = fields[2]
@@ -188,7 +187,8 @@ class TwoDNumbers(Numbering):
             start_idx = start_idx + (h - 1) * y_increment
             y_increment = -y_increment
 
-        return cls(start_idx, x_increment, y_increment, x_zigzag, y_zigzag, w, h)
+        return cls(start_idx, x_increment, y_increment, x_zigzag, y_zigzag,
+                   w, h)
 
     def to_dict(self):
         return dict(

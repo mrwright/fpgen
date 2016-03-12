@@ -2,7 +2,7 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 
-from units import UnitNumber, UNITS
+from units import UnitNumber
 
 ERROR_COLOR = gtk.gdk.Color(65535, 0, 0)
 
@@ -167,3 +167,26 @@ def configuration_widget(fields):
 
 def reconfigure(other_widgets):
     return tuple(widget.val() for widget in other_widgets)
+
+def do_configuration(primitive):
+    print("Reconfigure %r" % primitive)
+    dialog = gtk.Dialog("Configure")
+    ((widget, widgets), validator) = primitive.reconfiguration_widget()
+    if not validator:
+        validator = lambda: all(widget.valid() for widget in widgets)
+    dialog.get_content_area().add(widget)
+    dialog.add_button("Ok", 1)
+    dialog.add_button("Cancel", 2)
+    parent = primitive.parent()
+    if parent is not None:
+        dialog.add_button("Edit parent", 3)
+    while True:
+        result = dialog.run()
+        if result == 1:
+            if not validator():
+                continue
+            primitive.reconfigure(widget, widgets)
+        dialog.destroy()
+        if result == 3:
+            do_configuration(parent)
+        break

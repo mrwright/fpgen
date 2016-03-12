@@ -1264,7 +1264,7 @@ class Array(Primitive):
             widgetlist,
         )), lambda : True
 
-    def reconfigure(self, widget, other_widgets):
+    def reconfigure(self, _, other_widgets):
         combobox, ALL_NUMBERINGS, reconf_widgetlist = other_widgets
         idx = combobox.get_active()
         numbering_class, (_, widgetlist) = ALL_NUMBERINGS[idx]
@@ -1279,10 +1279,12 @@ class Array(Primitive):
         self._clearance, self._mask = reconfigure(reconf_widgetlist)
 
     def dependencies(self):
-        return self.elements + ([self.centerpoint] if self.centerpoint is not None else [])
+        return self.elements + ([self.centerpoint]
+                                if self.centerpoint is not None else [])
 
     def children(self):
-        return self.elements + ([self.centerpoint] if self.centerpoint is not None else [])
+        return self.elements + ([self.centerpoint]
+                                if self.centerpoint is not None else [])
 
     def draw(self, cr, active, selected):
         pass
@@ -1396,12 +1398,14 @@ class Array(Primitive):
         centerpoint_idx = dictionary['centerpoint']
         return cls(
             object_manager,
-            [object_manager.primitives[child] for child in dictionary['children']],
+            [object_manager.primitives[child]
+             for child in dictionary['children']],
             dictionary['nx'],
             dictionary['ny'],
             (object_manager.primitives[centerpoint_idx]
              if centerpoint_idx is not None else None),
-            numbering_cls.from_dict(dictionary['numbering']) if numbering_cls else None,
+            numbering_cls.from_dict(dictionary['numbering'])
+                if numbering_cls else None,
         )
 
     def number_of(self, child):

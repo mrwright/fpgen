@@ -4,9 +4,8 @@
 # Actually, the solver should be entirely rewritten.
 
 from collections import defaultdict
-from math import sqrt
-from numpy import array, dot, vdot, matrix
-from numpy.linalg import inv, matrix_rank
+from numpy import array, dot
+from numpy.linalg import inv
 
 from primitives import PRIMITIVE_TYPES
 from units import UnitNumber
