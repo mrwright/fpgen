@@ -4,6 +4,7 @@
 # Actually, the solver should be entirely rewritten.
 
 from collections import defaultdict
+from copy import deepcopy
 from numpy import array, dot
 from numpy.linalg import inv
 
@@ -61,7 +62,7 @@ class ObjectManager(object):
             default_clearance=self.default_clearance.to_dict(),
             next_point_idx=self._next_point_idx,
             all_points=list(self._all_points),
-            point_coords=self._point_coords,
+            point_coords=deepcopy(self._point_coords),
             primitives=primitive_dicts,
             draw_primitives=[self.primitive_idx(primitive)
                              for primitive in self.draw_primitives],

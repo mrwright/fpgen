@@ -5,7 +5,6 @@ pygtk.require('2.0')
 import gobject
 import gtk
 import itertools
-import json
 
 from object_manager import ObjectManager
 from geda_out import GedaOut
@@ -70,6 +69,14 @@ class FPArea(gtk.DrawingArea):
         # Create the center point
         self.deselect_all()
 
+        # _undo_list contains the entire undo history, *including the current
+        # configuration*! _redo_list contains the redo history, excluding
+        # the current configuration.
+        self._undo_list = []
+        self._redo_list = []
+
+        self.snapshot()
+
     def scroll_event(self, _, event):
         # When the scroll wheel is used, zoom in or out.
         x, y = self.coord_map(event.x, event.y)
@@ -118,6 +125,7 @@ class FPArea(gtk.DrawingArea):
                 self.object_manager.delete_primitive(self.active_object)
             self.active_object = None
             self.recalculate()
+            self.snapshot()
         elif keyname == 'dd':
             if len(self.selected_primitives) == 2:
                 l = list(self.selected_primitives)
@@ -140,8 +148,10 @@ class FPArea(gtk.DrawingArea):
             GedaOut.write(self.object_manager)
         elif keyname == 'r':
             if self.active_object:
-                do_configuration(self.active_object)
+                res = do_configuration(self.active_object)
                 self.recalculate()
+                if res:
+                    self.snapshot()
         else:
             cls = primitive_table.get(keyname)
             if cls:
@@ -159,19 +169,11 @@ class FPArea(gtk.DrawingArea):
         self.update_closest()
         self.queue_draw()
 
-    def save(self, fname):
-        d = self.object_manager.to_dict()
-        with open(fname, "w") as f:
-            f.write(json.dumps(d))
-
-    def load(self, fname):
-        with open(fname) as f:
-            contents = f.read()
-        d = json.loads(contents)
-        new_object_manager = ObjectManager.from_dict(d)
-        self.object_manager = new_object_manager
+    def set_object_manager(self, object_manager):
+        self.object_manager = object_manager
         self.selected_primitives.clear()
         self.update_buttons()
+        self.recalculate()
         self.update_closest()
         self.queue_draw()
 
@@ -185,6 +187,7 @@ class FPArea(gtk.DrawingArea):
                 # or all adding should happen here.
                 self.object_manager.add_primitive(p)
                 self.deselect_all()
+                self.snapshot()
         else:
             print("Cannot create constraint.")
         self.recalculate()
@@ -323,6 +326,31 @@ class FPArea(gtk.DrawingArea):
             self.active_y = self.y
             self.queue_draw()
 
+    def snapshot(self):
+        print("Snapshot")
+        fp_dict = self.object_manager.to_dict()
+        self._undo_list.append(fp_dict)
+        print(self._undo_list)
+        del self._redo_list[:]
+
+    def can_undo(self):
+        return len(self._undo_list) > 1
+
+    def can_redo(self):
+        return len(self._redo_list) > 0
+
+    def undo(self):
+        self._redo_list.append(self._undo_list.pop())
+        last_fp = self._undo_list[-1]
+        new_object_manager = ObjectManager.from_dict(last_fp)
+        self.set_object_manager(new_object_manager)
+
+    def redo(self):
+        next_fp = self._redo_list.pop()
+        self._undo_list.append(next_fp)
+        new_object_manager = ObjectManager.from_dict(next_fp)
+        self.set_object_manager(new_object_manager)
+
     def click_event(self, _, event):
         x, y = self.coord_map(event.x, event.y)
 
@@ -357,6 +385,8 @@ class FPArea(gtk.DrawingArea):
         print(event)
         if event.button == 1:
             print("Relase drag")
+            if self.dragging_object is not None:
+                self.snapshot()
             self.dragging_object = None
         elif event.button == 2:
             self.dragging = False

@@ -180,13 +180,17 @@ def do_configuration(primitive):
     parent = primitive.parent()
     if parent is not None:
         dialog.add_button("Edit parent", 3)
+
+    ret = False
     while True:
         result = dialog.run()
         if result == 1:
             if not validator():
                 continue
             primitive.reconfigure(widget, widgets)
+            ret = True
         dialog.destroy()
         if result == 3:
-            do_configuration(parent)
+            ret = do_configuration(parent)
         break
+    return ret

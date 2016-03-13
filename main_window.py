@@ -3,6 +3,7 @@ from __future__ import print_function
 import pygtk
 pygtk.require('2.0')
 import gtk
+import json
 
 from defaults import (
     DEFAULT_DEFAULT_CLEARANCE_MILS,
@@ -31,18 +32,22 @@ from ui_utils import (
 from units import UnitNumber
 
 class MainWindow(gtk.Window):
-    def _init_fields(self):
+    def _init_fields(self, filename):
         self._default_units = "mm"
+        self._filename = filename
 
-    def __init__(self):
+    def __init__(self, filename=None):
         super(MainWindow, self).__init__()
-        self._init_fields()
+        self._init_fields(filename)
 
         self.set_geometry_hints(min_width=300, min_height=300)
         self.set_default_size(800, 600)
         self.connect("delete-event", gtk.main_quit)
 
-        object_manager = self.new_blank_object_manager()
+        if filename:
+            object_manager = self.load_file(filename)
+        else:
+            object_manager = self.new_blank_object_manager()
 
         fparea = FPArea(object_manager)
         fparea.show()
@@ -98,6 +103,18 @@ class MainWindow(gtk.Window):
         object_manager.add_primitive(centerpoint)
         return object_manager
 
+    def load_file(self, filename):
+        with open(filename) as f:
+            contents = f.read()
+        d = json.loads(contents)
+        new_object_manager = ObjectManager.from_dict(d)
+        self.fparea.set_object_manager(new_object_manager)
+
+    def save_file(self, filename):
+        d = self.fparea.object_manager.to_dict()
+        with open(filename, "w") as f:
+            f.write(json.dumps(d))
+
     def load_save_dialog(self, action):
         chooser = gtk.FileChooserDialog(
             action=action,
@@ -122,7 +139,7 @@ class MainWindow(gtk.Window):
         response = chooser.run()
         if response == gtk.RESPONSE_OK:
             fname = chooser.get_filename()
-            self.fparea.load(fname)
+            self.load_file(fname)
 
         chooser.destroy()
 
@@ -132,7 +149,7 @@ class MainWindow(gtk.Window):
         response = chooser.run()
         if response == gtk.RESPONSE_OK:
             fname = chooser.get_filename()
-            self.fparea.save(fname)
+            self.save_file(fname)
 
         chooser.destroy()
 
@@ -169,6 +186,10 @@ class MainWindow(gtk.Window):
             break
         dialog.destroy()
 
+    def update_undo_redo(self, _, __, undo_item, redo_item):
+        undo_item.set_sensitive(self.fparea.can_undo())
+        redo_item.set_sensitive(self.fparea.can_redo())
+
     def create_menus(self):
         accel_group = gtk.AccelGroup()
 
@@ -195,6 +216,8 @@ class MainWindow(gtk.Window):
         edit_menu = gtk.Menu()
         undo_item = gtk.ImageMenuItem(gtk.STOCK_UNDO, accel_group)
         redo_item = gtk.ImageMenuItem(gtk.STOCK_REDO, accel_group)
+        edit_menu.connect("focus", self.update_undo_redo,
+                          undo_item, redo_item)
         edit_sep = gtk.SeparatorMenuItem()
         fp_settings_item = gtk.ImageMenuItem(gtk.STOCK_EDIT, accel_group)
         fp_settings_item.set_label("Footprint settings")
@@ -203,10 +226,12 @@ class MainWindow(gtk.Window):
         edit_menu.append(redo_item)
         edit_menu.append(edit_sep)
         edit_menu.append(fp_settings_item)
-        undo_item.set_sensitive(False)
-        redo_item.set_sensitive(False)
+        #undo_item.set_sensitive(False)
+        #redo_item.set_sensitive(False)
         undo_item.show()
         redo_item.show()
+        undo_item.connect("activate", lambda _, s: s.fparea.undo(), self)
+        redo_item.connect("activate", lambda _, s: s.fparea.redo(), self)
         edit_sep.show()
         fp_settings_item.show()
         edit_menu.show()
