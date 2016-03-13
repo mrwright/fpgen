@@ -98,6 +98,9 @@ class Primitive(object):
         '''
         Drag ourselves by a certain delta in the x and y directions.
         This will likely want to drag all children.
+
+        Returns whether or not we need to update point locations afterwards
+        (which will generally be the case when points are dragged).
         '''
         pass
 
@@ -120,8 +123,8 @@ class Primitive(object):
         if self._number is not None:
             # We're assigned a number directly, so return it.
             return self._number
-        # We don't have a number assigned directly, so fall back on asking if the
-        # parent assigns a number to us.
+        # We don't have a number assigned directly, so fall back on asking
+        # if the parent assigns a number to us.
         parent = self.parent()
         if parent is not None:
             return parent.number_of(self)
@@ -218,6 +221,7 @@ class Point(Primitive):
         x += offs_x
         y += offs_y
         self._object_manager.set_point_coords(self.point(), x, y)
+        return True
 
     def delete(self):
         self._object_manager.free_point(self.point())
@@ -258,7 +262,7 @@ class CenterPoint(Point):
         ]
 
     def drag(self, offs_x, offs_y):
-        pass
+        return False
 
     def can_delete(self):
         return False
@@ -418,6 +422,7 @@ class Pad(TileablePrimitive):
     def drag(self, offs_x, offs_y):
         for point in self.points:
             point.drag(offs_x, offs_y)
+        return True
 
     def dimensions_to_constrain(self, multiplier=1):
         # When in an array, we want the height and width of all pads to
@@ -453,6 +458,211 @@ class Pad(TileablePrimitive):
             dictionary['number'],
             UnitNumber.from_dict(clearance) if clearance else None,
             UnitNumber.from_dict(mask) if mask else None
+        )
+
+class Pin(TileablePrimitive):
+    NAME = "Pin"
+
+    def __init__(self, object_manager, hole_points, ring_points,
+                 center_point, number=None, clearance=None, mask=None):
+        super(Pin, self).__init__(object_manager, number, clearance, mask)
+        self._hole_points = hole_points
+        self._ring_points = ring_points
+        self._center_point = center_point
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration, hr=20, rr=40):
+        # Five points: the center point, and four at the compass points
+        # around it.
+        center_point = Point.new(object_manager, x, y)
+        hole_points = [
+            Point.new(object_manager, x, y - hr/2),
+            Point.new(object_manager, x - hr/2, y),
+            Point.new(object_manager, x + hr/2, y),
+            Point.new(object_manager, x, y + hr/2),
+        ]
+        ring_points = [
+            Point.new(object_manager, x, y - rr/2),
+            Point.new(object_manager, x - rr/2, y),
+            Point.new(object_manager, x + rr/2, y),
+            Point.new(object_manager, x, y + rr/2),
+        ]
+        for point in hole_points + ring_points + [center_point]:
+            object_manager.add_primitive(point, draw=True,
+                                         check_overconstraints=False)
+        return cls(object_manager, hole_points, ring_points, center_point)
+
+    @classmethod
+    def configure(cls, objects):
+        return None
+
+    def reconfiguration_widget(self):
+        return configuration_widget(
+            [
+                ("Number", StringEntry(), self._number),
+                ("Clearance", UnitNumberEntry(allow_empty=True),
+                 self._clearance),
+                ("Mask", UnitNumberEntry(allow_empty=True),
+                 self._mask),
+            ]
+        ), None
+
+    def reconfigure(self, widget, other_widgets):
+        (self._number,
+         self._clearance,
+         self._mask) = reconfigure(other_widgets)
+
+    @classmethod
+    def placeable(cls):
+        return True
+
+    @classmethod
+    def can_create(cls, objects):
+        return not objects
+
+    @property
+    def x(self):
+        return self._center_point.x
+
+    @property
+    def y(self):
+        return self._center_point.y
+
+    @property
+    def hole_r(self):
+        return self._hole_points[2].x - self._center_point.x
+
+    @property
+    def ring_r(self):
+        return self._ring_points[2].x - self._center_point.x
+
+    def children(self):
+        return self._hole_points + self._ring_points + [self._center_point]
+
+    def hp(self, x):
+        return self._hole_points[x].point()
+
+    def rp(self, x):
+        return self._ring_points[x].point()
+
+    def dist(self, p):
+        # We consider the distance to us to be 10 to anywhere inside us,
+        # and infinite to anywhere else.
+        x, y = p[0], p[1]
+        cx, cy = self.x, self.y
+        r = self.ring_r
+        if (x - cx) * (x - cx) + (y - cy) * (y - cy) < r * r:
+            return 10
+        else:
+            return None
+
+    def constraints(self):
+        constraints = []
+        # Points in a row should be aligned horizontally; points in a column
+        # vertically.
+        for p in [self.rp, self.hp]:
+            constraints.extend([
+                ([(p(1), 0, 1), (self._center_point.point(), 0, -1)], 0),
+                ([(p(1), 0, 1), (p(2), 0, -1)], 0)
+            ])
+            constraints.extend([
+                ([(p(0), 1, 0), (self._center_point.point(), -1, 0)], 0),
+                ([(p(0), 1, 0), (p(3), -1, 0)], 0)
+            ])
+            # Spacing should be equal, in the horizontal and vertical
+            # directions.
+            constraints.extend([
+                ([(p(1), 1, 0),
+                  (self._center_point.point(), -2, 0),
+                  (p(2), 1, 0)], 0)
+            ])
+            constraints.extend([
+                ([(p(0), 0, 1),
+                  (self._center_point.point(), 0, -2),
+                  (p(3), 0, 1)], 0)
+            ])
+            # Finally, the radius is the same in any direction.
+            constraints.extend([
+                ([(self._center_point.point(), -1, 1),
+                  (p(2), 1, 0),
+                  (p(3), 0, -1),
+                ], 0)
+            ])
+        return constraints
+
+    def draw(self, cr, active, selected):
+        cr.save()
+        if selected:
+            cr.set_source_rgb(0, 0, 0.7)
+        elif active:
+            cr.set_source_rgb(0.7, 0, 0)
+        else:
+            cr.set_source_rgb(0.7, 0.7, 0.7)
+        cr.arc(self.x, self.y, self.ring_r, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+        cr.save()
+        cr.set_source_rgb(.9, .9, .9)
+        cr.arc(self.x, self.y, self.hole_r, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+        if self.number() is not None:
+            cr.move_to(self.x, self.y)
+            cr.show_text(self.number())
+            cr.stroke()
+
+    def drag(self, offs_x, offs_y):
+        for point in self.children():
+            point.drag(offs_x, offs_y)
+        return True
+
+    def dimensions_to_constrain(self, multiplier=1):
+        # When in an array, we want the height and width of all pads
+        # to be equal.
+        return [
+            [(self.rp(2), multiplier, 0),
+             (self._center_point.point(), -multiplier, 0)],
+            [(self.hp(2), multiplier, 0),
+             (self._center_point.point(), -multiplier, 0)],
+        ]
+
+    def center_point(self):
+        return self._center_point.point()
+
+    def to_dict(self):
+        hole_point_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in self._hole_points]
+        ring_point_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in self._ring_points]
+        center_point_index = self._object_manager.primitive_idx(
+            self._center_point
+        )
+        return dict(
+            hole_points=hole_point_indices,
+            ring_points=ring_point_indices,
+            center_point=center_point_index,
+            deps=hole_point_indices + ring_point_indices + [center_point_index],
+            number=self._number,
+            clearance=self._clearance.to_dict() if self._clearance else None,
+            mask=self._mask.to_dict() if self._mask else None,
+        )
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        clearance = dictionary['clearance']
+        mask = dictionary['mask']
+        return cls(
+            object_manager,
+            [object_manager.primitives[idx]
+             for idx in dictionary['hole_points']],
+            [object_manager.primitives[idx]
+             for idx in dictionary['ring_points']],
+            object_manager.primitives[dictionary['center_point']],
+            dictionary['number'],
+            UnitNumber.from_dict(clearance) if clearance else None,
+            UnitNumber.from_dict(mask) if mask else None,
         )
 
 class Ball(TileablePrimitive):
@@ -590,6 +800,7 @@ class Ball(TileablePrimitive):
     def drag(self, offs_x, offs_y):
         for point in self.points:
             point.drag(offs_x, offs_y)
+        return True
 
     def dimensions_to_constrain(self, multiplier=1):
         # When in an array, we want the height and width of all pads
@@ -673,7 +884,8 @@ class TwoPointConstraint(Primitive):
     @classmethod
     def from_dict(cls, object_manager, dictionary):
         return cls(object_manager,
-                   [object_manager.primitives[idx] for idx in dictionary['points']])
+                   [object_manager.primitives[idx]
+                    for idx in dictionary['points']])
 
 class Horizontal(TwoPointConstraint):
     NAME = "Horizontal constraint"
@@ -882,6 +1094,7 @@ class DistanceConstraint(TwoPointConstraint):
             self.label_distance += offs_y
         else:
             self.label_distance += offs_x
+        return False
 
     def to_dict(self):
         dictionary = super(DistanceConstraint, self).to_dict()
@@ -1057,12 +1270,9 @@ class MarkedLine(Primitive):
         return self._points
 
     def drag(self, offs_x, offs_y):
-        '''
-        Drag ourselves by a certain delta in the x and y directions.
-        This will likely want to drag all children.
-        '''
         for point in self._points:
             point.drag(offs_x, offs_y)
+        return True
 
     def dist(self, p):
         def normalize(p):
@@ -1101,7 +1311,8 @@ class MarkedLine(Primitive):
 
     @classmethod
     def from_dict(cls, object_manager, dictionary):
-        points = [object_manager.primitives[idx] for idx in dictionary['points']]
+        points = [object_manager.primitives[idx]
+                  for idx in dictionary['points']]
         return cls(object_manager, points, dictionary['fraction'])
 
 
@@ -1109,7 +1320,8 @@ class Array(Primitive):
     ELEMTYPE = None
     ZORDER = 3
 
-    def __init__(self, object_manager, elements, nx, ny, centerpoint, numbering=None):
+    def __init__(self, object_manager, elements, nx, ny, centerpoint,
+                 numbering=None):
         super(Array, self).__init__(object_manager)
         self.elements = elements
         self.nx = nx
@@ -1218,7 +1430,8 @@ class Array(Primitive):
 
         reconfiguration_widget = gtk.Table(2, 2 + n)
         widgetlist = []
-        for idx, (label, entry) in enumerate(configuration_widget_items(fields)):
+        for idx, (label, entry) in enumerate(
+                configuration_widget_items(fields)):
             reconfiguration_widget.attach(label, 0, 1, idx, idx + 1)
             reconfiguration_widget.attach(entry, 1, 2, idx, idx + 1)
 
@@ -1374,6 +1587,7 @@ class Array(Primitive):
     def drag(self, offs_x, offs_y):
         for child in self.children():
             child.drag(offs_x, offs_y)
+        return True
 
     def to_dict(self):
         child_indices = [
@@ -1394,7 +1608,7 @@ class Array(Primitive):
     def from_dict(cls, object_manager, dictionary):
         numbering_cls_id = dictionary['numbering_type']
         numbering_cls, _ = (ALL_NUMBERINGS[numbering_cls_id]
-                            if numbering_cls_id else None, None)
+                            if numbering_cls_id else (None, None))
         centerpoint_idx = dictionary['centerpoint']
         return cls(
             object_manager,
@@ -1421,6 +1635,10 @@ class PadArray(Array):
     NAME = "Pad array"
     ELEMTYPE = Pad
 
+class PinArray(Array):
+    NAME = "Pin array"
+    ELEMTYPE = Pin
+
 class BallArray(Array):
     NAME = "Ball array"
     ELEMTYPE = Ball
@@ -1430,6 +1648,7 @@ PRIMITIVE_TYPES = [
     Point,
     CenterPoint,
     Pad,
+    Pin,
     Ball,
     Coincident,
     Horizontal,
@@ -1438,5 +1657,6 @@ PRIMITIVE_TYPES = [
     VertDistance,
     MarkedLine,
     PadArray,
+    PinArray,
     BallArray,
 ]

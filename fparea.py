@@ -327,10 +327,8 @@ class FPArea(gtk.DrawingArea):
             self.queue_draw()
 
     def snapshot(self):
-        print("Snapshot")
         fp_dict = self.object_manager.to_dict()
         self._undo_list.append(fp_dict)
-        print(self._undo_list)
         del self._redo_list[:]
 
     def can_undo(self):
@@ -361,10 +359,11 @@ class FPArea(gtk.DrawingArea):
             if self.active_object is not None:
                 print("Start drag")
                 self.dragging_object = self.active_object
-                self.dragging_object.drag(0, 0)
+                drag_result = self.dragging_object.drag(0, 0)
                 self.active_x = self.x
                 self.active_y = self.y
-                self.recalculate()
+                if drag_result:
+                    self.recalculate()
             else:
                 self.dragging_object = None
             self.queue_draw()

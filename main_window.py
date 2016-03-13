@@ -21,6 +21,8 @@ from primitives import (
     MarkedLine,
     Pad,
     PadArray,
+    Pin,
+    PinArray,
     VertDistance,
     Vertical,
 )
@@ -257,7 +259,9 @@ class MainWindow(gtk.Window):
         ("VDist", VertDistance),
         ("Ball", Ball),
         ("Pad", Pad),
+        ("Pin", Pin),
         ("PadAr", PadArray),
+        ("PinAr", PinArray),
         ("BallAr", BallArray),
         ("MarkLine", MarkedLine),
     ]

@@ -1,11 +1,11 @@
 # Table of units, and the conversion factor with internal units.
 UNITS = {
-    "iu" : 1, # Internal units are mils.
+    "iu" : 1., # Internal units are mils.
     "in" : 1000,
     "inch" : 1000,
     "inches" : 1000,
-    "mil" : 1,
-    "mils" : 1,
+    "mil" : 1.,
+    "mils" : 1.,
     "mm" : 39.370078740157,
     "cm" : 393.70078740157,
 }
