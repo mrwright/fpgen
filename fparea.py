@@ -183,10 +183,7 @@ class FPArea(gtk.DrawingArea):
             configuration = primitive_type.configure(self.selected_primitives)
             if configuration is not False:
                 # TODO: x and y coords
-                p = primitive_type.new(self.object_manager, 0, 0, configuration)
-                # TODO: this should really be added as part of the constructor,
-                # or all adding should happen here.
-                self.object_manager.add_primitive(p)
+                primitive_type.new(self.object_manager, 0, 0, configuration)
                 self.deselect_all()
                 self.snapshot()
         else:
@@ -224,7 +221,6 @@ class FPArea(gtk.DrawingArea):
                 y / self.scale_factor - self.scale_y)
 
     def update_closest(self):
-        # TODO: point_dist should be its own utility function.
         if self.active_x is not None:
             dist = point_dist(
                 (self.x, self.y),

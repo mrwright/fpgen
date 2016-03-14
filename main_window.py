@@ -106,8 +106,7 @@ class MainWindow(gtk.Window):
                                            'mil'),
             default_mask = UnitNumber(DEFAULT_DEFAULT_MASK_MILS, 'mil')
         )
-        centerpoint = CenterPoint.new(object_manager)
-        object_manager.add_primitive(centerpoint)
+        CenterPoint.new(object_manager)
         return object_manager
 
     def load_file(self, filename):

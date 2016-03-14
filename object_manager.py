@@ -47,6 +47,8 @@ class ObjectManager(object):
         # Map from each primitive to its parent.
         self.parent_map = {}
         self.degrees_of_freedom = 0
+        # Global storage for each class.
+        self.clsdata = {}
 
     def to_dict(self):
         # Note: a lot of stuff here could be made more efficient, but there's

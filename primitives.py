@@ -37,7 +37,8 @@ class Primitive(object):
         self._number = number
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration):
+    def new(cls, object_manager, x, y, configuration,
+            draw=True, constraining=True, check_overconstraints=False):
         '''
         Construct this primitive.
         '''
@@ -193,7 +194,12 @@ class Point(Primitive):
     @classmethod
     def new(cls, object_manager, x, y):
         point = object_manager.alloc_point(x, y)
-        return cls(object_manager, point)
+        self = cls(object_manager, point)
+        object_manager.add_primitive(
+            self,
+            check_overconstraints=False
+        )
+        return self
 
     @property
     def x(self):
@@ -256,7 +262,10 @@ class CenterPoint(Point):
     @classmethod
     def new(cls, object_manager):
         point = object_manager.alloc_point(0, 0)
-        return cls(object_manager, point)
+        object_manager.add_primitive(
+            cls(object_manager, point),
+            check_overconstraints=False
+        )
 
     @classmethod
     def can_create(cls, objects):
@@ -296,7 +305,8 @@ class Pad(TileablePrimitive):
         self.points = points
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration):
+    def new(cls, object_manager, x, y, configuration,
+            constraining=True):
         w = configuration['w']
         h = configuration['h']
         # Pads consist of 9 points, evenly spaced in a 3x3 grid.
@@ -308,10 +318,13 @@ class Pad(TileablePrimitive):
                               x + (i - 1) * w/2,
                               y + (j - 1) * h/2)
                 )
-        for point in points:
-            object_manager.add_primitive(point, draw=True,
-                                         check_overconstraints=False)
-        return cls(object_manager, points)
+        self = cls(object_manager, points)
+        object_manager.add_primitive(
+            self,
+            constraining=constraining,
+            check_overconstraints=False,
+        )
+        return self
 
     @classmethod
     def configure(cls, objects, w=100, h=100):
@@ -485,7 +498,8 @@ class Pin(TileablePrimitive):
         self._center_point = center_point
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration, hr=20, rr=40):
+    def new(cls, object_manager, x, y, configuration, hr=20, rr=40,
+            constraining=True):
         # Five points: the center point, and four at the compass points
         # around it.
         center_point = Point.new(object_manager, x, y)
@@ -501,10 +515,13 @@ class Pin(TileablePrimitive):
             Point.new(object_manager, x + rr/2, y),
             Point.new(object_manager, x, y + rr/2),
         ]
-        for point in hole_points + ring_points + [center_point]:
-            object_manager.add_primitive(point, draw=True,
-                                         check_overconstraints=False)
-        return cls(object_manager, hole_points, ring_points, center_point)
+        self = cls(object_manager, hole_points, ring_points, center_point)
+        object_manager.add_primitive(
+            self,
+            constraining=constraining,
+            check_overconstraints=False,
+        )
+        return self
 
     @classmethod
     def configure(cls, objects):
@@ -662,12 +679,13 @@ class Ball(TileablePrimitive):
     NAME = "Ball"
 
     def __init__(self, object_manager, points, number=None,
-                 clearance=None, mask=None):
+                 clearance=None, mask=None, constraining=True):
         super(Ball, self).__init__(object_manager, number, clearance, mask)
         self.points = points
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration, r=20):
+    def new(cls, object_manager, x, y, configuration, r=20,
+            draw=True, constraining=True, check_overconstraints=False):
         # Five points: the center point, and four at the compass points
         # around it.
         points = [
@@ -677,10 +695,13 @@ class Ball(TileablePrimitive):
             Point.new(object_manager, x + r/2, y),
             Point.new(object_manager, x, y + r/2),
         ]
-        for point in points:
-            object_manager.add_primitive(point, draw=True,
-                                         check_overconstraints=False)
-        return cls(object_manager, points)
+        self = cls(object_manager, points)
+        object_manager.add_primitive(
+            self,
+            constraining=constraining,
+            check_overconstraints=False,
+        )
+        return self
 
     @classmethod
     def configure(cls, objects):
@@ -814,7 +835,10 @@ class TwoPointConstraint(Primitive):
     @classmethod
     def new(cls, object_manager, x, y, configuration):
         objects = configuration['objects']
-        return cls(object_manager, objects)
+        object_manager.add_primitive(
+            cls(object_manager, objects),
+            check_overconstraints=True
+        )
 
     @classmethod
     def configure(cls, objects):
@@ -941,7 +965,10 @@ class DistanceConstraint(TwoPointConstraint):
         dist = configuration['dist']
         if cls.horiz and (p1.x > p2.x) or not cls.horiz and (p1.y > p2.y):
             p1, p2 = p2, p1
-        return cls(object_manager, p1, p2, dist, 100)
+        object_manager.add_primitive(
+            cls(object_manager, p1, p2, dist, 10),
+            check_overconstraints=True
+        )
 
     @classmethod
     def configure(cls, objects):
@@ -1096,7 +1123,10 @@ class MeasuredDistance(TwoPointConstraint):
         p2 = objects[1]
         if cls.horiz and (p1.x > p2.x) or not cls.horiz and (p1.y > p2.y):
             p1, p2 = p2, p1
-        return cls(object_manager, p1, p2, 100)
+        object_manager.add_primitive(
+            cls(object_manager, p1, p2, 100),
+            check_overconstraints=True
+        )
 
     def reconfiguration_widget(self):
         return None
@@ -1226,7 +1256,8 @@ class DrawnLine(Primitive):
         self._thickness = thickness
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration):
+    def new(cls, object_manager, x, y, configuration,
+            draw=True, constraining=True, check_overconstraints=False):
         specified_thickness = configuration['thickness']
         if specified_thickness:
             thickness = specified_thickness.to("iu")
@@ -1277,12 +1308,11 @@ class DrawnLine(Primitive):
         else:
             centerpoints = []
 
-        for point in p1points + p2points + centerpoints:
-            object_manager.add_primitive(point, draw=True,
-                                         check_overconstraints=False)
-
-        return cls(object_manager, p1points, p2points, centerpoints,
-                   specified_thickness)
+        object_manager.add_primitive(
+            cls(object_manager, p1points, p2points, centerpoints,
+                specified_thickness),
+            check_overconstraints=False
+        )
 
     @classmethod
     def configure(cls, objects):
@@ -1494,17 +1524,18 @@ class MarkedLine(Primitive):
         self._fraction = fraction
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration):
+    def new(cls, object_manager, x, y, configuration,
+            draw=True, constraining=True, check_overconstraints=False):
         points = [
             Point.new(object_manager,
                       x + (i - 1) * 100,
                       y)
             for i in xrange(3)
         ]
-        for point in points:
-            object_manager.add_primitive(point, draw=True,
-                                         check_overconstraints=False)
-        return MarkedLine(object_manager, points, configuration)
+        object_manager.add_primitive(
+            cls(object_manager, points, configuration),
+            check_overconstraints=False
+        )
 
     @classmethod
     def configure(cls, objects):
@@ -1635,7 +1666,8 @@ class Array(Primitive):
         self.centerpoint = centerpoint
 
     @classmethod
-    def new(cls, object_manager, x, y, configuration):
+    def new(cls, object_manager, x, y, configuration,
+            draw=True, constraining=True, check_overconstraints=False):
         nx = configuration['nx']
         ny = configuration['ny']
         elemcfg = cls.ELEMTYPE.configure([])
@@ -1645,22 +1677,22 @@ class Array(Primitive):
                 p = cls.ELEMTYPE.new(object_manager,
                                      x + (i - nx/2) * 30,
                                      y + (j - ny/2) * 30,
-                                     elemcfg)
+                                     elemcfg,
+                                     constraining=False)
 
                 elements.append(p)
-                object_manager.add_primitive(p, constraining=False,
-                                             check_overconstraints=False)
 
         if (nx%2 == 0) or (ny%2 == 0):
             # If either dimension is even, add a center point
             p = Point.new(object_manager, x, y)
-            object_manager.add_primitive(p, constraining=False,
-                                         check_overconstraints=False)
             centerpoint = p
         else:
             centerpoint = None
 
-        return cls(object_manager, elements, nx, ny, centerpoint)
+        object_manager.add_primitive(
+            cls(object_manager, elements, nx, ny, centerpoint),
+            check_overconstraints=False,
+        )
 
     @classmethod
     def can_create(cls, objects):
