@@ -1346,6 +1346,43 @@ class DrawnLine(Primitive):
             point.drag(offs_x, offs_y)
         return True
 
+    def to_dict(self):
+        p1_indices, p2_indices = (
+            [
+                self._object_manager.primitive_idx(point)
+                for point in points
+            ]
+            for points in (self._p1points, self._p2points)
+        )
+        center_indices = [
+            self._object_manager.primitive_idx(point)
+            for point in self._centerpoints
+        ] if self._centerpoints else None
+        return dict(
+            p1points=p1_indices,
+            p2points=p2_indices,
+            centerpoints=center_indices,
+            thickness=self._thickness.to_dict() if self._thickness else None,
+        )
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        p1points, p2points = (
+            # TODO: helper function for serializing lists of points.
+            [
+                object_manager.primitives[idx]
+                for idx in points
+            ]
+            for points in (dictionary['p1points'], dictionary['p2points'])
+        )
+        centerpoints = [
+            object_manager.primitives[idx]
+            for idx in dictionary['centerpoints']
+        ] if dictionary['centerpoints'] else None
+        thickness = (UnitNumber.from_dict(dictionary['thickness'])
+                     if dictionary['thickness'] else None)
+        return cls(object_manager, p1points, p2points, centerpoints, thickness)
+
 class HorizontalDrawnLine(DrawnLine):
     HORIZONTAL = True
 
