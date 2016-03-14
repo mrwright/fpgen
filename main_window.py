@@ -16,8 +16,10 @@ from primitives import (
     BallArray,
     CenterPoint,
     Coincident,
+    DrawnLine,
     HorizDistance,
     Horizontal,
+    HorizontalDrawnLine,
     MarkedLine,
     Pad,
     PadArray,
@@ -25,6 +27,7 @@ from primitives import (
     PinArray,
     VertDistance,
     Vertical,
+    VerticalDrawnLine,
 )
 from ui_utils import (
     configuration_widget,
@@ -264,6 +267,9 @@ class MainWindow(gtk.Window):
         ("PinAr", PinArray),
         ("BallAr", BallArray),
         ("MarkLine", MarkedLine),
+        ("DrawLine", DrawnLine),
+        ("HDrawLine", HorizontalDrawnLine),
+        ("VDrawLine", VerticalDrawnLine),
     ]
 
     def create_button_bar(self):

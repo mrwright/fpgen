@@ -171,7 +171,11 @@ def reconfigure(other_widgets):
 def do_configuration(primitive):
     print("Reconfigure %r" % primitive)
     dialog = gtk.Dialog("Configure")
-    ((widget, widgets), validator) = primitive.reconfiguration_widget()
+    widget_info = primitive.reconfiguration_widget()
+    print widget_info
+    if not widget_info:
+        return False
+    ((widget, widgets), validator) = widget_info
     if not validator:
         validator = lambda: all(widget.valid() for widget in widgets)
     dialog.get_content_area().add(widget)

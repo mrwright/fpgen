@@ -3,6 +3,17 @@ pygtk.require('2.0')
 import gtk
 import math
 
+from constraint_utils import (
+    constrain_ball,
+    constrain_horiz,
+    constrain_vert,
+    equal_space_horiz,
+    equal_space_vert,
+)
+from math_utils import (
+    line_dist,
+    point_dist,
+)
 from numbering import (
     ALL_NUMBERINGS,
     NUMBER_CONST_HEIGHT,
@@ -199,7 +210,7 @@ class Point(Primitive):
         return self.p
 
     def dist(self, p):
-        return self._object_manager.point_dist((self.x, self.y), p)
+        return point_dist((self.x, self.y), p)
 
     def draw(self, cr, active, selected):
         if active:
@@ -335,7 +346,10 @@ class Pad(TileablePrimitive):
         return self.points
 
     def p(self, x, y):
-        return self.points[x + 3 * y].point()
+        return self.point(x, y).point()
+
+    def point(self, x, y):
+        return self.points[x + 3 * y]
 
     @property
     def x0(self):
@@ -375,31 +389,31 @@ class Pad(TileablePrimitive):
     def constraints(self):
         # Points in a row should be aligned horizontally; points in a column
         # vertically.
-        horiz_constraints = [
-            ([(self.p(i, j), 0, 1), (self.p(i+1, j), 0, -1)], 0)
-            for i in range(2) for j in range(3)
-        ]
-        vert_constraints = [
-            ([(self.p(j, i), 1, 0), (self.p(j, i+1), -1, 0)], 0)
-            for i in range(2) for j in range(3)
-        ]
+        constraints = []
+        for j in xrange(3):
+            constraints.extend(
+                constrain_horiz([self.point(i, j) for i in xrange(3)])
+            )
+        for i in xrange(3):
+            constraints.extend(
+                constrain_vert([self.point(i, j) for j in xrange(3)])
+            )
+
         # Spacing should be equal, in the horizontal and vertical directions.
         # (Note that this only needs to be applied to the first row/column;
         # the horizontal/vertical constraints take care of the rest.)
-        eq_horiz_constraints = [
-            ([(self.p(0, 0), 1, 0),
-              (self.p(1, 0), -2, 0),
-              (self.p(2, 0), 1, 0)], 0)
-        ]
-        eq_vert_constraints = [
-            ([(self.p(0, 0), 0, 1),
-              (self.p(0, 1), 0, -2),
-              (self.p(0, 2), 0, 1)], 0)
-        ]
-        return (horiz_constraints +
-                vert_constraints +
-                eq_horiz_constraints +
-                eq_vert_constraints)
+        constraints.extend(
+            equal_space_horiz([self.point(0, 0),
+                               self.point(1, 0),
+                               self.point(2, 0)])
+        )
+        constraints.extend(
+            equal_space_vert([self.point(0, 0),
+                              self.point(0, 1),
+                              self.point(0, 2)])
+        )
+
+        return constraints
 
     def draw(self, cr, active, selected):
         cr.save()
@@ -433,7 +447,7 @@ class Pad(TileablePrimitive):
                  (self.p(0, 2), 0, -multiplier)]]
 
     def center_point(self):
-        return self.p(1, 1)
+        return self.points[4]
 
     def to_dict(self):
         point_indices = [
@@ -560,35 +574,14 @@ class Pin(TileablePrimitive):
         constraints = []
         # Points in a row should be aligned horizontally; points in a column
         # vertically.
-        for p in [self.rp, self.hp]:
-            constraints.extend([
-                ([(p(1), 0, 1), (self._center_point.point(), 0, -1)], 0),
-                ([(p(1), 0, 1), (p(2), 0, -1)], 0)
-            ])
-            constraints.extend([
-                ([(p(0), 1, 0), (self._center_point.point(), -1, 0)], 0),
-                ([(p(0), 1, 0), (p(3), -1, 0)], 0)
-            ])
-            # Spacing should be equal, in the horizontal and vertical
-            # directions.
-            constraints.extend([
-                ([(p(1), 1, 0),
-                  (self._center_point.point(), -2, 0),
-                  (p(2), 1, 0)], 0)
-            ])
-            constraints.extend([
-                ([(p(0), 0, 1),
-                  (self._center_point.point(), 0, -2),
-                  (p(3), 0, 1)], 0)
-            ])
-            # Finally, the radius is the same in any direction.
-            constraints.extend([
-                ([(self._center_point.point(), -1, 1),
-                  (p(2), 1, 0),
-                  (p(3), 0, -1),
-                ], 0)
-            ])
-        return constraints
+        ring_points = (self._ring_points[:2]
+                       + [self._center_point]
+                       + self._ring_points[2:])
+        hole_points = (self._hole_points[:2]
+                       + [self._center_point]
+                       + self._hole_points[2:])
+
+        return constrain_ball(ring_points) + constrain_ball(hole_points)
 
     def draw(self, cr, active, selected):
         cr.save()
@@ -627,7 +620,7 @@ class Pin(TileablePrimitive):
         ]
 
     def center_point(self):
-        return self._center_point.point()
+        return self._center_point
 
     def to_dict(self):
         hole_point_indices = [
@@ -747,39 +740,7 @@ class Ball(TileablePrimitive):
             return None
 
     def constraints(self):
-        # Points in a row should be aligned horizontally; points in a column
-        # vertically.
-        horiz_constraints = [
-            ([(self.p(1), 0, 1), (self.p(2), 0, -1)], 0),
-            ([(self.p(1), 0, 1), (self.p(3), 0, -1)], 0)
-        ]
-        vert_constraints = [
-            ([(self.p(0), 1, 0), (self.p(2), -1, 0)], 0),
-            ([(self.p(0), 1, 0), (self.p(4), -1, 0)], 0)
-        ]
-        # Spacing should be equal, in the horizontal and vertical directions.
-        eq_horiz_constraints = [
-            ([(self.p(1), 1, 0),
-              (self.p(2), -2, 0),
-              (self.p(3), 1, 0)], 0)
-        ]
-        eq_vert_constraints = [
-            ([(self.p(0), 0, 1),
-              (self.p(2), 0, -2),
-              (self.p(4), 0, 1)], 0)
-        ]
-        # Finally, the radius is the same in any direction.
-        eq_constraints = [
-            ([(self.p(2), -1, 1),
-              (self.p(3), 1, 0),
-              (self.p(4), 0, -1),
-            ], 0)
-        ]
-        return (horiz_constraints +
-                vert_constraints +
-                eq_horiz_constraints +
-                eq_vert_constraints +
-                eq_constraints)
+        return constrain_ball(self.points)
 
     def draw(self, cr, active, selected):
         cr.save()
@@ -809,7 +770,7 @@ class Ball(TileablePrimitive):
                  (self.p(2), -multiplier, 0)]]
 
     def center_point(self):
-        return self.p(2)
+        return self.points[2]
 
     def to_dict(self):
         point_indices = [
@@ -894,9 +855,7 @@ class Horizontal(TwoPointConstraint):
         super(Horizontal, self).__init__(object_manager, objects)
 
     def constraints(self):
-        return [
-            ([(self.p1.point(), 0, 1), (self.p2.point(), 0, -1)], 0)
-        ]
+        return constrain_horiz([self.p1, self.p2])
 
     def dist(self, p):
         x, y = p[0], p[1]
@@ -905,9 +864,9 @@ class Horizontal(TwoPointConstraint):
         else:
             p1, p2 = self.p2, self.p1
         if x < p1.x:
-            return 10 + self._object_manager.point_dist(p, (p1.x, p1.y))
+            return 10 + point_dist(p, (p1.x, p1.y))
         elif x > p2.x:
-            return 10 + self._object_manager.point_dist(p, (p2.x, p2.y))
+            return 10 + point_dist(p, (p2.x, p2.y))
         else:
             return 10 + (y - p1.y) * (y - p1.y)
 
@@ -937,9 +896,7 @@ class Vertical(TwoPointConstraint):
         super(Vertical, self).__init__(object_manager, objects)
 
     def constraints(self):
-        return [
-            ([(self.p1.point(), 1, 0), (self.p2.point(), -1, 0)], 0)
-        ]
+        return constrain_vert([self.p1, self.p2])
 
     def dist(self, p):
         x, y = p[0], p[1]
@@ -948,9 +905,9 @@ class Vertical(TwoPointConstraint):
         else:
             p1, p2 = self.p2, self.p1
         if y < p1.y:
-            return 10 + self._object_manager.point_dist(p, (p1.x, p1.y))
+            return 10 + point_dist(p, (p1.x, p1.y))
         elif y > p2.y:
-            return 10 + self._object_manager.point_dist(p, (p2.x, p2.y))
+            return 10 + point_dist(p, (p2.x, p2.y))
         else:
             return 10 + (x - p1.x) * (x - p1.x)
 
@@ -1077,13 +1034,13 @@ class DistanceConstraint(TwoPointConstraint):
 
     def dist(self, p):
         if self.horiz:
-            return self._object_manager.point_dist(
+            return point_dist(
                 p,
                 (self.p1.x,
                  self.p1.y + self.label_distance)
             )
         else:
-            return self._object_manager.point_dist(
+            return point_dist(
                 p,
                 (self.p1.x + self.label_distance,
                  self.p2.y)
@@ -1131,13 +1088,11 @@ class Coincident(TwoPointConstraint):
         super(Coincident, self).__init__(object_manager, objects)
 
     def constraints(self):
-        return [
-            ([(self.p1.point(), 0, 1), (self.p2.point(), 0, -1)], 0),
-            ([(self.p1.point(), 1, 0), (self.p2.point(), -1, 0)], 0),
-        ]
+        return (constrain_horiz([self.p1, self.p2]) +
+                constrain_vert([self.p1, self.p2]))
 
     def dist(self, p):
-        dist = self._object_manager.point_dist(
+        dist = point_dist(
             p, (self.p1.x, self.p1.y))
         if dist < 10:
             return dist + 1
@@ -1160,6 +1115,242 @@ class Coincident(TwoPointConstraint):
         cr.move_to(self.p1.x + 5, self.p1.y - 5)
         cr.line_to(self.p2.x - 5, self.p2.y + 5)
         cr.stroke()
+
+class DrawnLine(Primitive):
+    NAME = "Line"
+    ZORDER = 1
+    HORIZONTAL = False
+    VERTICAL = False
+
+    def __init__(self, object_manager, p1points, p2points, centerpoints,
+                 thickness=None):
+        super(DrawnLine, self).__init__(object_manager)
+        self._p1points = p1points
+        self._p2points = p2points
+        self._centerpoints = centerpoints
+        self._thickness = thickness
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        specified_thickness = configuration['thickness']
+        if specified_thickness:
+            thickness = specified_thickness.to("iu")
+        else:
+            thickness = 10
+        if cls.VERTICAL:
+            xoffs = 0
+            yoffs = 100
+        else:
+            xoffs = 100
+            yoffs = 0
+        p1points = [
+            Point.new(object_manager,
+                      x - xoffs +  0,        y - yoffs - thickness),
+            Point.new(object_manager,
+                      x - xoffs - thickness, y - yoffs + 0),
+            Point.new(object_manager,
+                      x - xoffs +         0, y - yoffs + 0),
+            Point.new(object_manager,
+                      x - xoffs + thickness, y - yoffs + 0),
+            Point.new(object_manager,
+                      x - xoffs +         0, y - yoffs + thickness),
+        ]
+        p2points = [
+            Point.new(object_manager,
+                      x + xoffs +         0, y + yoffs - thickness),
+            Point.new(object_manager,
+                      x + xoffs - thickness, y + yoffs + 0),
+            Point.new(object_manager,
+                      x + xoffs +         0, y + yoffs + 0),
+            Point.new(object_manager,
+                      x + xoffs + thickness, y + yoffs + 0),
+            Point.new(object_manager,
+                      x + xoffs +         0, y + yoffs + thickness),
+        ]
+        if cls.HORIZONTAL:
+            centerpoints = [
+                Point.new(object_manager, x, y - thickness),
+                Point.new(object_manager, x, y + 0),
+                Point.new(object_manager, x, y + thickness),
+            ]
+        elif cls.VERTICAL:
+            centerpoints = [
+                Point.new(object_manager, x - thickness, y),
+                Point.new(object_manager, x +         0, y),
+                Point.new(object_manager, x + thickness, y),
+            ]
+        else:
+            centerpoints = []
+
+        for point in p1points + p2points + centerpoints:
+            object_manager.add_primitive(point, draw=True,
+                                         check_overconstraints=False)
+
+        return cls(object_manager, p1points, p2points, centerpoints,
+                   specified_thickness)
+
+    @classmethod
+    def configure(cls, objects):
+        dialog = gtk.Dialog("Enter dimensions")
+        widget, entry_widgets = configuration_widget(
+            [
+                ("Thickness",
+                 UnitNumberEntry(allow_neg=False, allow_empty=True),
+                 None),
+            ]
+        )
+        dialog.get_content_area().add(widget)
+        dialog.add_button("Ok", 1)
+        dialog.add_button("Cancel", 2)
+        while True:
+            result = dialog.run()
+            if result == 1:
+                if not all(widget.valid() for widget in entry_widgets):
+                    continue
+                thickness_entry = entry_widgets[0]
+                thickness = thickness_entry.val()
+                result = dict(
+                    thickness=thickness,
+                )
+            else:
+                result = False
+            break
+        dialog.destroy()
+
+        return result
+
+    def reconfiguration_widget(self):
+        print self._thickness
+        if self._thickness is not None:
+            return configuration_widget(
+                [
+                    ("Thickness",
+                     UnitNumberEntry(allow_neg=False, allow_empty=False),
+                     self._thickness),
+                ]
+            ), None
+        else:
+            return None
+
+    def reconfigure(self, widget, other_widgets):
+        (self._thickness, ) = reconfigure(other_widgets)
+
+    @classmethod
+    def placeable(cls):
+        return True
+
+    @classmethod
+    def can_create(cls, objects):
+        return not objects
+
+    def children(self):
+        return self._p1points + self._p2points + self._centerpoints
+
+    @property
+    def x1(self):
+        return self._p1points[2].x
+
+    @property
+    def y1(self):
+        return self._p1points[2].y
+
+    @property
+    def x2(self):
+        return self._p2points[2].x
+
+    @property
+    def y2(self):
+        return self._p2points[2].y
+
+    @property
+    def thickness(self):
+        return self._p1points[2].y - self._p1points[0].y
+
+    def dist(self, p):
+        res = line_dist(self.x1, self.y1, self.x2, self.y2, p[0], p[1])
+
+        if res < self.thickness * self.thickness:
+            return 10
+        else:
+            return res
+
+    def constraints(self):
+        constraints = []
+        constraints.extend(constrain_ball(self._p1points))
+        constraints.extend(constrain_ball(self._p2points))
+
+        if self.HORIZONTAL:
+            constraints.extend(
+                constrain_vert(self._centerpoints) +
+                equal_space_vert(self._centerpoints) +
+                constrain_horiz([self._p1points[0],
+                                 self._centerpoints[0]]) +
+                constrain_horiz([self._p1points[2],
+                                 self._centerpoints[1],
+                                 self._p2points[2]]) +
+                equal_space_horiz([self._p1points[2],
+                                   self._centerpoints[1],
+                                   self._p2points[2]])
+            )
+        elif self.VERTICAL:
+            constraints.extend(
+                constrain_horiz(self._centerpoints) +
+                equal_space_horiz(self._centerpoints) +
+                constrain_vert([self._p1points[0],
+                                self._centerpoints[0]]) +
+                constrain_vert([self._p1points[2],
+                                 self._centerpoints[1],
+                                 self._p2points[2]]) +
+                equal_space_vert([self._p1points[2],
+                                   self._centerpoints[1],
+                                   self._p2points[2]])
+            )
+
+        constraints.append(
+            ([(self._p1points[0].point(), 0, 1),
+              (self._p1points[2].point(), 0, -1),
+              (self._p2points[0].point(), 0, -1),
+              (self._p2points[2].point(), 0, 1)], 0)
+        )
+
+        if self._thickness:
+            constraints.append(
+                ([(self._p1points[2].point(), 0, 1),
+                  (self._p1points[0].point(), 0, -1)], self._thickness.to("iu"))
+            )
+
+        return constraints
+
+    def draw(self, cr, active, selected):
+        cr.save()
+        if active:
+            cr.set_source_rgb(1, 0, 0)
+        elif selected:
+            # TODO: if both are the case.
+            cr.set_source_rgb(0.4, 0.4, 1)
+        else:
+            cr.set_source_rgb(0, 1, 0)
+
+        cr.set_line_width(self.thickness * 2)
+        cr.move_to(self.x1, self.y1)
+        cr.line_to(self.x2, self.y2)
+        cr.stroke()
+        cr.arc(self.x1, self.y1, self.thickness, 0, 2 * math.pi)
+        cr.fill()
+        cr.arc(self.x2, self.y2, self.thickness, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+
+    def drag(self, offs_x, offs_y):
+        for point in self.children():
+            point.drag(offs_x, offs_y)
+        return True
+
+class HorizontalDrawnLine(DrawnLine):
+    HORIZONTAL = True
+
+class VerticalDrawnLine(DrawnLine):
+    VERTICAL = True
 
 class MarkedLine(Primitive):
     NAME = "Marked line"
@@ -1275,25 +1466,7 @@ class MarkedLine(Primitive):
         return True
 
     def dist(self, p):
-        def normalize(p):
-            mag = p[0] * p[0] + p[1] * p[1]
-            sqrtmag = math.sqrt(mag)
-            return (p[0]/sqrtmag, p[1]/sqrtmag), sqrtmag
-        v1, _ = normalize((p[0] - self.p1.x, p[1] - self.p1.y))
-        v2, _ = normalize((p[0] - self.p2.x, p[1] - self.p2.y))
-        v3_orig = (self.p2.x - self.p1.x, self.p2.y - self.p1.y)
-        v3, v3mag = normalize(v3_orig)
-
-        if v1[0] * v3[0] + v1[1] * v3[1] < 0:
-            res = self._object_manager.point_dist(p, (self.p1.x, self.p1.y))
-        elif v2[0] * v3[0] + v2[1] * v3[1] > 0:
-            res = self._object_manager.point_dist(p, (self.p2.x, self.p2.y))
-        else:
-            res = abs(
-                v3_orig[1] * p[0] - v3_orig[0] * p[1]
-                + self.p2.x * self.p1.y - self.p2.y * self.p1.x
-            ) / v3mag
-            res = res * res
+        res = line_dist(self.p1.x, self.p1.y, self.p2.x, self.p2.y, p[0], p[1])
 
         if res < 10:
             return 10
@@ -1512,43 +1685,25 @@ class Array(Primitive):
 
         # Horizontal/vertical
         for i in range(0, min(self.nx, 2)):
-            for j in range(0, self.ny - 1):
-                all_constraints.append(
-                    (
-                        [(self.p(i, j).center_point(), 1, 0),
-                         (self.p(i, j + 1).center_point(), -1, 0),
-                         ], 0),
-                )
+            all_constraints.extend(
+                constrain_vert([self.p(i, j).center_point()
+                                for j in xrange(self.ny)]))
 
-        for i in range(0, self.nx - 1):
-            for j in range(0, min(self.ny, 2)):
-                all_constraints.append(
-                    (
-                        [(self.p(i, j).center_point(), 0, 1),
-                         (self.p(i + 1, j).center_point(), 0, -1),
-                         ], 0),
-                )
+        for j in range(0, min(self.ny, 2)):
+            all_constraints.extend(
+                constrain_horiz([self.p(i, j).center_point()
+                                 for i in xrange(self.nx)]))
 
         # Same distance
         for i in range(0, self.nx):
-            for j in range(0, self.ny - 2):
-                all_constraints.append(
-                    (
-                        [(self.p(i, j).center_point(), 0, 1),
-                         (self.p(i, j + 1).center_point(), 0, -2),
-                         (self.p(i, j + 2).center_point(), 0, 1),
-                         ], 0),
-                )
+            all_constraints.extend(
+                equal_space_vert([self.p(i, j).center_point()
+                                   for j in xrange(self.ny)]))
 
-        for i in range(0, self.nx - 2):
-            for j in range(0, self.ny):
-                all_constraints.append(
-                    (
-                        [(self.p(i, j).center_point(), 1, 0),
-                         (self.p(i + 1, j).center_point(), -2, 0),
-                         (self.p(i + 2, j).center_point(), 1, 0),
-                         ], 0),
-                )
+        for j in range(0, self.ny):
+            all_constraints.extend(
+                equal_space_horiz([self.p(i, j).center_point()
+                                   for i in xrange(self.nx)]))
 
         # Same size
         p0_dimensions = self.p(0, 0).dimensions_to_constrain()
@@ -1563,16 +1718,37 @@ class Array(Primitive):
                     )
 
         if self.centerpoint is not None:
-            all_constraints.extend([
-                ([(self.centerpoint.point(), -2, 0),
-                  (self.p(0, 0).center_point(), 1, 0),
-                  (self.p(self.nx - 1, 0).center_point(), 1, 0)
-                ], 0),
-                ([(self.centerpoint.point(), 0, -2),
-                  (self.p(0, 0).center_point(), 0, 1),
-                  (self.p(0, self.ny - 1).center_point(), 0, 1)
-                ], 0)
-            ])
+            if self.nx > 1:
+                all_constraints.extend(
+                    equal_space_horiz(
+                        [self.p(0, 0).center_point(),
+                         self.centerpoint,
+                         self.p(self.nx - 1, 0).center_point()]
+                    )
+                )
+            else:
+                all_constraints.extend(
+                    constrain_vert(
+                        [self.p(0, 0).center_point(),
+                         self.centerpoint.point()]
+                    )
+                )
+
+            if self.ny > 1:
+                all_constraints.extend(
+                    equal_space_vert(
+                        [self.p(0, 0).center_point(),
+                         self.centerpoint,
+                         self.p(0, self.ny - 1).center_point()]
+                    )
+                )
+            else:
+                all_constraints.extend(
+                    constrain_horiz(
+                        [self.p(0, 0).center_point(),
+                         self.centerpoint]
+                    )
+                )
 
         return all_constraints
 
@@ -1651,6 +1827,9 @@ PRIMITIVE_TYPES = [
     Pin,
     Ball,
     Coincident,
+    DrawnLine,
+    HorizontalDrawnLine,
+    VerticalDrawnLine,
     Horizontal,
     Vertical,
     HorizDistance,

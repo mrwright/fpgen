@@ -6,8 +6,9 @@ import gobject
 import gtk
 import itertools
 
-from object_manager import ObjectManager
 from geda_out import GedaOut
+from math_utils import point_dist
+from object_manager import ObjectManager
 from primitives import (
     HorizDistance,
     Horizontal,
@@ -225,7 +226,7 @@ class FPArea(gtk.DrawingArea):
     def update_closest(self):
         # TODO: point_dist should be its own utility function.
         if self.active_x is not None:
-            dist =  self.object_manager.point_dist(
+            dist = point_dist(
                 (self.x, self.y),
                 (self.active_x, self.active_y))
             if dist < 100:
@@ -252,21 +253,24 @@ class FPArea(gtk.DrawingArea):
         self.object_manager.draw_primitives.sort(
             key=lambda x: x.ZORDER, reverse=True)
 
-        active_primitive = ((self.active_object,)
-                            if self.active_object is not None else ())
-        selected_primitives = (
+        active_primitive = ([self.active_object]
+                            if self.active_object is not None else [])
+        selected_primitives = [
             primitive for primitive in self.object_manager.draw_primitives
             if primitive is not self.active_object
-            and primitive in self.selected_primitives)
-        other_primitives = (
+            and primitive in self.selected_primitives]
+        other_primitives = [
             primitive for primitive in self.object_manager.draw_primitives
             if primitive is not self.active_object
-            and primitive not in self.selected_primitives)
+            and primitive not in self.selected_primitives]
 
-        for primitive in itertools.chain(
-                other_primitives,
-                selected_primitives,
-                active_primitive):
+        primitives = sorted(other_primitives +
+                            selected_primitives +
+                            active_primitive,
+                            key = lambda x: x.ZORDER, reverse=True)
+
+        for primitive in primitives:
+
             cr.save()
             primitive.draw(cr,
                            primitive is self.active_object,

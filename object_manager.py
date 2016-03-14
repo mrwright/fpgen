@@ -203,11 +203,6 @@ class ObjectManager(object):
 
         self.update_points()
 
-    def point_dist(self, p1, p2):
-        dx = p1[0] - p2[0]
-        dy = p1[1] - p2[1]
-        return (dx*dx + dy*dy)
-
     def alloc_point(self, x, y):
         old = self._next_point_idx
         self._next_point_idx += 1
