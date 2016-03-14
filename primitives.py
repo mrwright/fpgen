@@ -1081,6 +1081,101 @@ class VertDistance(DistanceConstraint):
 
     horiz = False
 
+class MeasuredDistance(TwoPointConstraint):
+    def __init__(self, object_manager, p1, p2, label_dist):
+        super(MeasuredDistance, self).__init__(object_manager, [p1, p2])
+
+        self.p1 = p1
+        self.p2 = p2
+        self.label_distance = label_dist
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        objects = list(configuration['objects'])
+        p1 = objects[0]
+        p2 = objects[1]
+        if cls.horiz and (p1.x > p2.x) or not cls.horiz and (p1.y > p2.y):
+            p1, p2 = p2, p1
+        return cls(object_manager, p1, p2, 100)
+
+    def reconfiguration_widget(self):
+        return None
+
+    def constraints(self):
+        return []
+
+    def draw(self, cr, active, selected):
+        if selected:
+            cr.set_source_rgb(0, 0, 1)
+        elif active:
+            cr.set_source_rgb(1, 0, 0)
+        else:
+            cr.set_source_rgb(0, 0, 0)
+        cr.set_line_width(0.3)
+        cr.move_to(self.p1.x, self.p1.y)
+        if self.horiz:
+            cr.line_to(self.p1.x, self.p1.y + self.label_distance)
+        else:
+            cr.line_to(self.p1.x + self.label_distance, self.p1.y)
+        cr.stroke()
+        cr.move_to(self.p2.x, self.p2.y)
+        if self.horiz:
+            # Note: the p1 here is not a bug.
+            cr.line_to(self.p2.x, self.p1.y + self.label_distance)
+        else:
+            cr.line_to(self.p1.x + self.label_distance, self.p2.y)
+        cr.stroke()
+        if self.horiz:
+            cr.move_to(self.p1.x, self.p1.y + self.label_distance)
+            cr.line_to(self.p2.x, self.p1.y + self.label_distance)
+            cr.stroke()
+        else:
+            cr.move_to(self.p1.x + self.label_distance, self.p2.y)
+            cr.line_to(self.p1.x + self.label_distance, self.p1.y)
+            cr.stroke()
+        # TODO: arrowheads
+
+    def dist(self, p):
+        if self.horiz:
+            return line_dist(
+                self.p1.x, self.p1.y + self.label_distance,
+                self.p2.x, self.p1.y + self.label_distance,
+                p[0], p[1])
+        else:
+            return line_dist(
+                self.p1.x + self.label_distance, self.p1.y,
+                self.p1.x + self.label_distance, self.p2.y,
+                p[0], p[1])
+
+    def drag(self, offs_x, offs_y):
+        if self.horiz:
+            self.label_distance += offs_y
+        else:
+            self.label_distance += offs_x
+        return False
+
+    def to_dict(self):
+        dictionary = super(MeasuredDistance, self).to_dict()
+        dictionary.update(dict(
+            label_distance=self.label_distance,
+        ))
+        return dictionary
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        p1, p2 = tuple([object_manager.primitives[idx]
+                        for idx in dictionary['points']])
+        return cls(object_manager,
+                   p1, p2,
+                   dictionary['label_distance']
+        )
+
+class MeasuredHorizDistance(MeasuredDistance):
+    horiz = True
+
+class MeasuredVertDistance(MeasuredDistance):
+    horiz = False
+
 class Coincident(TwoPointConstraint):
     NAME = "Coincident constraint"
 
@@ -1875,4 +1970,6 @@ PRIMITIVE_TYPES = [
     PadArray,
     PinArray,
     BallArray,
+    MeasuredHorizDistance,
+    MeasuredVertDistance,
 ]
