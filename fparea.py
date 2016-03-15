@@ -27,6 +27,9 @@ class FPArea(gtk.DrawingArea):
         # not screen coordinates.
         'cursor-motion': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
                           (float, float)),
+
+        'modified': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+                     (bool,)),
     }
 
     def __init__(self, object_manager):
@@ -323,10 +326,29 @@ class FPArea(gtk.DrawingArea):
             self.active_y = self.y
             self.queue_draw()
 
+    def set_unmodified(self):
+        for i in xrange(len(self._undo_list) - 1):
+            fp, _ = self._undo_list[i]
+            self._undo_list[i] = (fp, True)
+        for i in xrange(len(self._redo_list)):
+            fp, _ = self._redo_list[i]
+            self._redo_list[i] = (fp, True)
+        (fp, modified) = self._undo_list.pop()
+        self._undo_list.append((fp, False))
+        self.emit("modified", False)
+
+    def clear_undo_buffer(self):
+        fp_dict = self.object_manager.to_dict()
+        del self._redo_list[:]
+        del self._undo_list[:]
+        self._undo_list.append((fp_dict, False))
+        self.emit("modified", False)
+
     def snapshot(self):
         fp_dict = self.object_manager.to_dict()
-        self._undo_list.append(fp_dict)
+        self._undo_list.append((fp_dict, True))
         del self._redo_list[:]
+        self.emit("modified", True)
 
     def can_undo(self):
         return len(self._undo_list) > 1
@@ -336,15 +358,17 @@ class FPArea(gtk.DrawingArea):
 
     def undo(self):
         self._redo_list.append(self._undo_list.pop())
-        last_fp = self._undo_list[-1]
+        (last_fp, last_modified) = self._undo_list[-1]
         new_object_manager = ObjectManager.from_dict(last_fp)
         self.set_object_manager(new_object_manager)
+        self.emit("modified", last_modified)
 
     def redo(self):
-        next_fp = self._redo_list.pop()
-        self._undo_list.append(next_fp)
+        (next_fp, next_modified) = self._redo_list.pop()
+        self._undo_list.append((next_fp, next_modified))
         new_object_manager = ObjectManager.from_dict(next_fp)
         self.set_object_manager(new_object_manager)
+        self.emit("modified", next_modified)
 
     def click_event(self, _, event):
         x, y = self.coord_map(event.x, event.y)

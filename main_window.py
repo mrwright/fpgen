@@ -43,6 +43,7 @@ class MainWindow(gtk.Window):
     def _init_fields(self, filename):
         self._default_units = "mm"
         self._filename = filename
+        self._modified = False
 
     def __init__(self, filename=None):
         super(MainWindow, self).__init__()
@@ -58,6 +59,7 @@ class MainWindow(gtk.Window):
             object_manager = self.new_blank_object_manager()
 
         fparea = FPArea(object_manager)
+        fparea.connect("modified", self.set_modified)
         fparea.show()
         self.fparea = fparea
         fparea.set_flags(gtk.CAN_FOCUS)
@@ -91,6 +93,19 @@ class MainWindow(gtk.Window):
         hbox.show()
         vbox.show()
         self.add(vbox)
+
+        self.update_title()
+
+    def update_title(self):
+        if self._modified:
+            mod_char = '*'
+        else:
+            mod_char = ''
+        if self._filename:
+            display_fname = self._filename
+        else:
+            display_fname = "(Untitled)"
+        self.set_title("FPGen - {} {}".format(display_fname, mod_char))
 
     def update_dof(self, _, dof, dof_label):
         dof_label.set_text(str(dof))
@@ -141,12 +156,19 @@ class MainWindow(gtk.Window):
 
         return chooser
 
+    def set_modified(self, _, modified):
+        self._modified = modified
+        self.update_title()
+
     def do_load(self, _):
         chooser = self.load_save_dialog(gtk.FILE_CHOOSER_ACTION_OPEN)
         response = chooser.run()
         if response == gtk.RESPONSE_OK:
             fname = chooser.get_filename()
             self.load_file(fname)
+            self._filename = fname
+            self.fparea.clear_undo_buffer()
+            self.update_title()
 
         chooser.destroy()
 
@@ -157,8 +179,19 @@ class MainWindow(gtk.Window):
         if response == gtk.RESPONSE_OK:
             fname = chooser.get_filename()
             self.save_file(fname)
+            self._filename = fname
+            self.fparea.set_unmodified()
+            self.update_title()
 
         chooser.destroy()
+
+    def do_save(self, _):
+        if self._filename:
+            self.save_file(self._filename)
+            self.fparea.set_unmodified()
+            self.update_title()
+        else:
+            return self.do_saveas(_)
 
     def do_fp_settings(self, _):
         fparea = self.fparea
@@ -197,8 +230,16 @@ class MainWindow(gtk.Window):
         undo_item.set_sensitive(self.fparea.can_undo())
         redo_item.set_sensitive(self.fparea.can_redo())
 
+    def do_undo_redo(self, undo):
+        if undo:
+            self.fparea.undo()
+        else:
+            self.fparea.redo()
+        self.queue_draw()
+
     def create_menus(self):
         accel_group = gtk.AccelGroup()
+        self.add_accel_group(accel_group)
 
         file_menu = gtk.Menu()
         open_item = gtk.ImageMenuItem(gtk.STOCK_OPEN, accel_group)
@@ -207,6 +248,7 @@ class MainWindow(gtk.Window):
         quit_sep = gtk.SeparatorMenuItem()
         quit_item = gtk.ImageMenuItem(gtk.STOCK_QUIT, accel_group)
         open_item.connect("activate", self.do_load)
+        save_item.connect("activate", self.do_save)
         saveas_item.connect("activate", self.do_saveas)
         quit_item.connect("activate", gtk.main_quit)
         file_menu.append(open_item)
@@ -222,9 +264,16 @@ class MainWindow(gtk.Window):
 
         edit_menu = gtk.Menu()
         undo_item = gtk.ImageMenuItem(gtk.STOCK_UNDO, accel_group)
+        undo_item.add_accelerator("activate", accel_group,
+                                  ord('z'), gtk.gdk.CONTROL_MASK,
+                                  gtk.ACCEL_VISIBLE)
         redo_item = gtk.ImageMenuItem(gtk.STOCK_REDO, accel_group)
+        redo_item.add_accelerator("activate", accel_group,
+                                  ord('y'), gtk.gdk.CONTROL_MASK,
+                                  gtk.ACCEL_VISIBLE)
         edit_menu.connect("focus", self.update_undo_redo,
                           undo_item, redo_item)
+        # TODO: update_undo_redo needs to be called in many more circumstances.
         edit_sep = gtk.SeparatorMenuItem()
         fp_settings_item = gtk.ImageMenuItem(gtk.STOCK_EDIT, accel_group)
         fp_settings_item.set_label("Footprint settings")
@@ -237,8 +286,8 @@ class MainWindow(gtk.Window):
         #redo_item.set_sensitive(False)
         undo_item.show()
         redo_item.show()
-        undo_item.connect("activate", lambda _, s: s.fparea.undo(), self)
-        redo_item.connect("activate", lambda _, s: s.fparea.redo(), self)
+        undo_item.connect("activate", lambda _, s: s.do_undo_redo(True), self)
+        redo_item.connect("activate", lambda _, s: s.do_undo_redo(False), self)
         edit_sep.show()
         fp_settings_item.show()
         edit_menu.show()
