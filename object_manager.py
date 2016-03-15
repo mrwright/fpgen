@@ -310,10 +310,10 @@ class ObjectManager(object):
             row = [0] * 2 * n
             rowdict = defaultdict(int)
             for (pt, coeffx, coeffy) in coeffs:
-                row[2 * point_to_matrix[pt]] = coeffx
-                rowdict[2 * point_to_matrix[pt]] = coeffx
-                row[2 * point_to_matrix[pt] + 1] = coeffy
-                rowdict[2 * point_to_matrix[pt] + 1] = coeffy
+                row[2 * point_to_matrix[pt]] += coeffx
+                rowdict[2 * point_to_matrix[pt]] += coeffx
+                row[2 * point_to_matrix[pt] + 1] += coeffy
+                rowdict[2 * point_to_matrix[pt] + 1] += coeffy
             result = self.eliminate(current_dictmat, rowdict, current_mins)
             if not result:
                 return False

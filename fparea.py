@@ -118,7 +118,6 @@ class FPArea(gtk.DrawingArea):
             if config is not False:
                 p = Pad.new(self.object_manager, self.x, self.y, config)
                 #p = Ball(self.object_manager, self.x, self.y, 100)
-                self.object_manager.add_primitive(p)
                 self.recalculate()
         elif keyname == 'Delete':
             print(self.active_object)
@@ -131,7 +130,6 @@ class FPArea(gtk.DrawingArea):
             if len(self.selected_primitives) == 2:
                 l = list(self.selected_primitives)
                 p = HorizDistance(self.object_manager, l[0], l[1], 100, 30)
-                self.object_manager.add_primitive(p)
                 self.selected_primitives.clear()
             else:
                 print("Select two points.")
@@ -162,7 +160,6 @@ class FPArea(gtk.DrawingArea):
                         p = cls.new(self.object_manager,
                                     0, 0,
                                     configuration)
-                        self.object_manager.add_primitive(p)
                         self.deselect_all()
                 else:
                     print("Cannot create constraint.")

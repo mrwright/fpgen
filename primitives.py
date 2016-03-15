@@ -1165,6 +1165,20 @@ class MeasuredDistance(TwoPointConstraint):
             cr.stroke()
         # TODO: arrowheads
 
+    @property
+    def x(self):
+        if self.horiz:
+            return (self.p1.x + self.p2.x)/2
+        else:
+            return self.p1.x + self.label_distance
+
+    @property
+    def y(self):
+        if self.horiz:
+            return self.p1.y + self.label_distance
+        else:
+            return (self.p1.y + self.p2.y)/2
+
     def dist(self, p):
         if self.horiz:
             return line_dist(
@@ -1200,11 +1214,247 @@ class MeasuredDistance(TwoPointConstraint):
                    dictionary['label_distance']
         )
 
+    def dimensions_to_constrain(self, multiplier=1):
+        raise NotImplementedError()
+
 class MeasuredHorizDistance(MeasuredDistance):
     horiz = True
 
+    NAME = "Measured horizontal distance"
+
+    def dimensions_to_constrain(self, multiplier=1):
+        return [[(self.p1.point(), -multiplier, 0),
+                 (self.p2.point(), multiplier, 0)]]
+
 class MeasuredVertDistance(MeasuredDistance):
     horiz = False
+
+    NAME = "Measured vertical distance"
+
+    def dimensions_to_constrain(self, multiplier=1):
+        return [[(self.p1.point(), 0, -multiplier),
+                 (self.p2.point(), 0, multiplier)]]
+
+
+class SameDistance(Primitive):
+    ZORDER = 1
+
+    NAME = "Same distance constraint"
+
+    def __init__(self, object_manager, constrained_object, equiv_class_id,
+                 is_representative):
+        super(SameDistance, self).__init__(object_manager, [constrained_object])
+        self._constrained_object = constrained_object
+        self._equiv_class_id = equiv_class_id
+        self._is_representative = is_representative
+
+    @classmethod
+    def rename_class(cls, object_manager, from_class, to_class):
+        clsdata = object_manager.clsdata[cls]
+        for primitive in clsdata['samedist_primitives']:
+            if primitive._equiv_class_id == from_class:
+                primitive._equiv_class_id = to_class
+                if from_class != to_class:
+                    primitive._is_representative = False
+        classes = clsdata['equiv_classes']
+        classes.remove(from_class)
+        classes.add(to_class)
+
+    @classmethod
+    def squash_classes(cls, object_manager):
+        clsdata = object_manager.clsdata[cls]
+        classes = clsdata['equiv_classes']
+        numclasses = len(classes)
+        rename_dict = {}
+        for c in classes:
+            if c < numclasses:
+                rename_dict[c] = c
+
+        for c in classes:
+            if c >= numclasses:
+                for i in xrange(numclasses):
+                    if i not in rename_dict:
+                        rename_dict[i] = c
+
+        for to_class, from_class in rename_dict.iteritems():
+            cls.rename_class(object_manager, from_class, to_class)
+
+    @classmethod
+    def new(cls, object_manager, x, y, configuration):
+        if cls not in object_manager.clsdata:
+            object_manager.clsdata[cls] = dict(
+                # Note: an optimization we could do here is have this be a
+                # map from the class number to the set of members, but that
+                # doesn't seem worthwhile.
+                equiv_classes=set(),
+                samedist_primitives=set()
+            )
+        clsdata = object_manager.clsdata[cls]
+        equiv_classes = clsdata['equiv_classes']
+
+        objects = set(configuration)
+
+        other_distance_primitives = clsdata['samedist_primitives']
+        classes_to_merge = set()
+        for primitive in other_distance_primitives:
+            remove = False
+            for obj in objects:
+                if obj is primitive._constrained_object:
+                    classes_to_merge.add(primitive._equiv_class_id)
+                    remove = True
+                    break
+            if remove:
+                objects.remove(obj)
+        # At this point, "objects" contains only those objects that
+        # still need an equivalence class and weren't already part of one.
+
+        if len(classes_to_merge) == 0:
+            # No existing classes; we can assign a new one.
+            equiv_class = len(equiv_classes)
+            equiv_classes.add(equiv_class)
+            represented = False
+        elif len(classes_to_merge) >= 1:
+            equiv_class = min(classes_to_merge)
+            classes_to_merge.remove(equiv_class)
+            for from_class in classes_to_merge:
+                cls.rename_class(object_manager, from_class, equiv_class)
+            cls.squash_classes(object_manager)
+            represented = True
+
+        added_primitives = []
+
+        for obj in objects:
+            sd = cls(object_manager, obj, equiv_class, not represented)
+            represented = True
+            object_manager.add_primitive(sd, check_overconstraints=True)
+            # TODO: recover from the situation where we overconstrain.
+            other_distance_primitives.add(sd)
+
+        for obj in other_distance_primitives:
+            print obj._equiv_class_id, obj._is_representative
+
+    @classmethod
+    def configure(cls, objects):
+        return objects
+
+    @classmethod
+    def can_create(cls, objects):
+        return len(objects) > 1 and all(isinstance(obj, MeasuredDistance)
+                                        for obj in objects)
+
+    def dependencies(self):
+        return [self._constrained_object]
+
+    def delete(self):
+        clsdata = self._object_manager.clsdata[type(self)]
+        other_primitives = clsdata['samedist_primitives']
+        classes = clsdata['equiv_classes']
+        other_primitives.remove(self)
+
+        other_count = 0
+        other_primitive = None
+        for primitive in other_primitives:
+            if primitive._equiv_class_id == self._equiv_class_id:
+                other_count += 1
+                other_primitive = primitive
+        if other_count == 0:
+            classes.remove(self._equiv_class_id)
+            self.squash_classes(self._object_manager)
+        elif other_count == 1:
+            self._object_manager.delete_primitive(other_primitive)
+            # Note: the above deletion will also remove the class from the list.
+        elif self._is_representative:
+            other_primitive._is_representative = True
+
+    @property
+    def x(self):
+        obj = self._constrained_object
+        return obj.x
+
+    @property
+    def y(self):
+        obj = self._constrained_object
+        return obj.y
+
+    def dist(self, p):
+        d = point_dist(p, (self.x, self.y))
+        if d < 10:
+            return 0
+        else:
+            return d + 1
+
+    def draw(self, cr, active, selected):
+        obj = self._constrained_object
+        clsid = self._equiv_class_id
+        if selected:
+            cr.set_source_rgb(0, 0, 1)
+        elif active:
+            cr.set_source_rgb(1, 0, 0)
+        else:
+            cr.set_source_rgb(0, 0, 0)
+        cr.set_line_width(0.3)
+        for c in xrange(clsid + 1):
+            if obj.horiz:
+                x = obj.x - (clsid / 2. - c) * 1.5
+                y = obj.y
+            else:
+                x = obj.x
+                y = obj.y - (clsid / 2. - c) * 1.5
+            cr.move_to(x - 2, y - 2)
+            cr.line_to(x + 2, y + 2)
+            cr.stroke()
+
+    def constraints(self):
+        if not self._is_representative:
+            return []
+
+        clsdata = self._object_manager.clsdata[type(self)]
+        constraints = []
+        thesedims = self._constrained_object.dimensions_to_constrain()
+        for primitive in clsdata['samedist_primitives']:
+            if (primitive._equiv_class_id == self._equiv_class_id and
+                primitive is not self):
+                dims = primitive._constrained_object.dimensions_to_constrain(
+                    multiplier=-1
+                )
+                for (thiscons, othercons) in zip(thesedims, dims):
+                    constraints.append(
+                        (thiscons + othercons, 0),
+                    )
+
+        return constraints
+
+    def to_dict(self):
+        constrained_object_idx = self._object_manager.primitive_idx(
+            self._constrained_object
+        )
+        return dict(
+            constrained_object=constrained_object_idx,
+            equiv_class_id=self._equiv_class_id,
+            is_representative=self._is_representative,
+            deps=[constrained_object_idx],
+        )
+
+    @classmethod
+    def from_dict(cls, object_manager, dictionary):
+        constrained_object = object_manager.primitives[
+            dictionary['constrained_object']
+        ]
+        self = cls(
+            object_manager,
+            constrained_object,
+            dictionary['equiv_class_id'],
+            dictionary['is_representative'],
+        )
+        if cls not in object_manager.clsdata:
+            object_manager.clsdata[cls] = dict(
+                equiv_classes=set(),
+                samedist_primitives=set()
+            )
+        clsdata = object_manager.clsdata[cls]
+        clsdata['equiv_classes'].add(self._equiv_class_id)
+        clsdata['samedist_primitives'].add(self)
+        return self
 
 class Coincident(TwoPointConstraint):
     NAME = "Coincident constraint"
@@ -1488,6 +1738,7 @@ class DrawnLine(Primitive):
             p2points=p2_indices,
             centerpoints=center_indices,
             thickness=self._thickness.to_dict() if self._thickness else None,
+            deps=p1_indices+p2_indices+center_indices,
         )
 
     @classmethod
@@ -1643,6 +1894,7 @@ class MarkedLine(Primitive):
         return dict(
             points=point_indices,
             fraction=self._fraction,
+            deps=point_indices,
         )
 
     @classmethod
@@ -2004,4 +2256,5 @@ PRIMITIVE_TYPES = [
     BallArray,
     MeasuredHorizDistance,
     MeasuredVertDistance,
+    SameDistance,
 ]

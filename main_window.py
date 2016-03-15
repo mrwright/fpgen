@@ -27,6 +27,7 @@ from primitives import (
     PadArray,
     Pin,
     PinArray,
+    SameDistance,
     VertDistance,
     Vertical,
     VerticalDrawnLine,
@@ -273,6 +274,7 @@ class MainWindow(gtk.Window):
         ("VDrawLine", VerticalDrawnLine),
         ("HCons", MeasuredHorizDistance),
         ("VCons", MeasuredVertDistance),
+        ("==", SameDistance),
     ]
 
     def create_button_bar(self):
