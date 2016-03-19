@@ -10,6 +10,7 @@ from constraint_utils import (
     equal_space_horiz,
     equal_space_vert,
 )
+from exceptiontypes import OverconstrainedException
 from math_utils import (
     line_dist,
     point_dist,
@@ -1291,10 +1292,16 @@ class SameDistance(Primitive):
             )
         clsdata = object_manager.clsdata[cls]
         equiv_classes = clsdata['equiv_classes']
+        other_distance_primitives = clsdata['samedist_primitives']
+        # Copy the set of classes in case we need to roll everything back.
+        original_equiv_classes = set(equiv_classes)
+        original_class_assignments = {
+            primitive: (primitive._equiv_class_id, primitive._is_representative)
+            for primitive in other_distance_primitives
+        }
 
         objects = set(configuration)
 
-        other_distance_primitives = clsdata['samedist_primitives']
         classes_to_merge = set()
         for primitive in other_distance_primitives:
             remove = False
@@ -1323,15 +1330,27 @@ class SameDistance(Primitive):
 
         added_primitives = []
 
-        for obj in objects:
-            sd = cls(object_manager, obj, equiv_class, not represented)
-            represented = True
-            object_manager.add_primitive(sd, check_overconstraints=True)
-            # TODO: recover from the situation where we overconstrain.
-            other_distance_primitives.add(sd)
+        try:
+            if not objects:
+                object_manager.update_points()
+            for obj in objects:
+                sd = cls(object_manager, obj, equiv_class, not represented)
+                represented = True
+                other_distance_primitives.add(sd)
+                object_manager.add_primitive(sd, check_overconstraints=True)
 
-        for obj in other_distance_primitives:
-            print obj._equiv_class_id, obj._is_representative
+                added_primitives.append(sd)
+        except OverconstrainedException:
+            if objects:
+                other_distance_primitives.remove(sd)
+            for primitive in added_primitives:
+                object_manager.remove_primitive(primitive)
+                other_distance_primitives.remove(primitive)
+            clsdata['equiv_classes'] = original_equiv_classes
+            for (primitive, (primitive_class, is_representative)
+                 ) in original_class_assignments.iteritems():
+                primitive._equiv_class_id = primitive_class
+                primitive._is_representative = is_representative
 
     @classmethod
     def configure(cls, objects):
@@ -1455,6 +1474,9 @@ class SameDistance(Primitive):
         clsdata['equiv_classes'].add(self._equiv_class_id)
         clsdata['samedist_primitives'].add(self)
         return self
+
+    def drag(self, offs_x, offs_y):
+        self._constrained_object.drag(offs_x, offs_y)
 
 class Coincident(TwoPointConstraint):
     NAME = "Coincident constraint"

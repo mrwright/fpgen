@@ -8,6 +8,7 @@ from copy import deepcopy
 from numpy import array, dot
 from numpy.linalg import inv
 
+from exceptiontypes import OverconstrainedException
 from primitives import PRIMITIVE_TYPES
 from units import UnitNumber
 
@@ -161,13 +162,17 @@ class ObjectManager(object):
             self.draw_primitives.append(primitive)
         if constraining:
             self.constraining_primitives.append(primitive)
-        if check_overconstraints and not self.update_points():
-            print "OVERCONSTRAINED"
-            self.primitives.pop()
-            if draw:
-                self.draw_primitives.pop()
-            if constraining:
-                self.constraining_primitives.pop()
+        if check_overconstraints:
+            try:
+                self.update_points()
+            except OverconstrainedException:
+                print "OVERCONSTRAINED"
+                self.primitives.pop()
+                if draw:
+                    self.draw_primitives.pop()
+                if constraining:
+                    self.constraining_primitives.pop()
+                raise
         # Note: we don't need to recompute the entire primitive map here, but it
         # shouldn't be a bottleneck.
         self.update_parent_map()
@@ -195,15 +200,22 @@ class ObjectManager(object):
         if any(not x.can_delete() for x in to_remove):
             return
         for p in to_remove:
-            self.primitives.remove(p)
-            # TODO: these should be sets.
-            if p in self.draw_primitives:
-                self.draw_primitives.remove(p)
-            if p in self.constraining_primitives:
-                self.constraining_primitives.remove(p)
+            self.remove_primitive(p)
             p.delete()
 
         self.update_points()
+
+    def remove_primitive(self, obj):
+        '''
+        Remove the primitive directly, without removing dependencies
+        or calling the delete method.
+        '''
+        self.primitives.remove(obj)
+        # TODO: these should be sets.
+        if obj in self.draw_primitives:
+            self.draw_primitives.remove(obj)
+        if obj in self.constraining_primitives:
+            self.constraining_primitives.remove(obj)
 
     def alloc_point(self, x, y):
         old = self._next_point_idx
@@ -364,7 +376,7 @@ class ObjectManager(object):
         assert idx == len(self._all_points)
         result = self.build_matrix(constraints, point_to_matrix)
         if not result:
-            return False
+            raise OverconstrainedException
         m, t = result
         self._cached_matrix = inv(m)
         self._cached_target = t

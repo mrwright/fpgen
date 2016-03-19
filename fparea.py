@@ -6,6 +6,7 @@ import gobject
 import gtk
 import itertools
 
+from exceptiontypes import OverconstrainedException
 from geda_out import GedaOut
 from math_utils import point_dist
 from object_manager import ObjectManager
@@ -183,9 +184,13 @@ class FPArea(gtk.DrawingArea):
             configuration = primitive_type.configure(self.selected_primitives)
             if configuration is not False:
                 # TODO: x and y coords
-                primitive_type.new(self.object_manager, 0, 0, configuration)
-                self.deselect_all()
-                self.snapshot()
+                try:
+                    primitive_type.new(self.object_manager, 0, 0, configuration)
+                except OverconstrainedException:
+                    print("Overconstrained!")
+                else:
+                    self.deselect_all()
+                    self.snapshot()
         else:
             print("Cannot create constraint.")
         self.recalculate()
