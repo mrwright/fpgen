@@ -26,7 +26,9 @@ from ui_utils import (
     UnitNumberEntry,
     configuration_widget,
     configuration_widget_items,
+    horiz_arrow,
     reconfigure,
+    vert_arrow,
 )
 from units import UnitNumber
 
@@ -442,7 +444,9 @@ class Pad(TileablePrimitive):
         cr.restore()
         cr.save()
         if self.number() is not None:
-            cr.move_to(self.x0 + self.w/2, self.y0 + self.h/2)
+            extents = cr.text_extents(self.number())
+            w, h = extents[2:4]
+            cr.move_to(self.x0 + self.w/2 - w / 2, self.y0 + self.h/2  + h / 2)
             cr.show_text(self.number())
             cr.stroke()
         cr.restore()
@@ -618,7 +622,9 @@ class Pin(TileablePrimitive):
         cr.fill()
         cr.restore()
         if self.number() is not None:
-            cr.move_to(self.x, self.y)
+            extents = cr.text_extents(self.number())
+            w, h = extents[2:4]
+            cr.move_to(self.x - w / 2, self.y + h / 2)
             cr.show_text(self.number())
             cr.stroke()
 
@@ -776,7 +782,9 @@ class Ball(TileablePrimitive):
         cr.fill()
         cr.restore()
         if self.number() is not None:
-            cr.move_to(self.x, self.y)
+            extents = cr.text_extents(self.number())
+            w, h = extents[2:4]
+            cr.move_to(self.x - w / 2, self.y + h / 2)
             cr.show_text(self.number())
             cr.stroke()
 
@@ -1040,39 +1048,115 @@ class DistanceConstraint(TwoPointConstraint):
         else:
             cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(0.3)
-        cr.move_to(self.p1.x, self.p1.y)
+
+        label = str(self.distance)
+        extents = cr.text_extents(label)
+        w, h = extents[2:4]
+        text_padding = 2
+
         if self.horiz:
-            cr.line_to(self.p1.x, self.p1.y + self.label_distance)
-        else:
-            cr.line_to(self.p1.x + self.label_distance, self.p1.y)
-        cr.stroke()
-        cr.move_to(self.p2.x, self.p2.y)
-        if self.horiz:
+            fits = (w < self.p2.x - self.p1.x - text_padding*2)
+            if self.label_distance >= 0:
+                line_dist = self.label_distance + h/2
+                arrow_dist = self.label_distance
+                if fits:
+                    text_dist = self.label_distance + h/2
+                else:
+                    text_dist = self.label_distance + 3*h/2
+            else:
+                line_dist = self.label_distance - h/2
+                arrow_dist = self.label_distance
+                if fits:
+                    text_dist = self.label_distance + h/2
+                else:
+                    text_dist = self.label_distance - h/2
+            cr.move_to(self.p1.x, self.p1.y)
+            cr.line_to(self.p1.x, self.p1.y + line_dist)
+            cr.stroke()
+            cr.move_to(self.p2.x, self.p2.y)
             # Note: the p1 here is not a bug.
-            cr.line_to(self.p2.x, self.p1.y + self.label_distance)
+            cr.line_to(self.p2.x, self.p1.y + line_dist)
+            cr.stroke()
+            horiz_arrow(cr, self.p1.x,
+                        (self.p1.x + self.p2.x) / 2 - w/2 - text_padding,
+                        self.p1.y + arrow_dist,
+                        True, False, 2)
+            horiz_arrow(cr, (self.p1.x + self.p2.x) / 2 + w/2 + text_padding,
+                        self.p2.x,
+                        self.p1.y + arrow_dist,
+                        False, True, 2)
+            cr.move_to((self.p1.x + self.p2.x) / 2 - w/2,
+                       self.p1.y + text_dist)
+            cr.show_text(label)
+            cr.stroke()
         else:
-            cr.line_to(self.p1.x + self.label_distance, self.p2.y)
-        cr.stroke()
-        if self.horiz:
-            cr.move_to(self.p1.x, self.p1.y + self.label_distance)
-        else:
-            cr.move_to(self.p1.x + self.label_distance, self.p2.y)
-        cr.show_text("%s" % (self.distance,))
-        cr.stroke()
+            fits = (w < self.p2.y - self.p1.y - text_padding*2)
+            if self.label_distance >= 0:
+                line_dist = self.label_distance + h/2
+                arrow_dist = self.label_distance
+                if fits:
+                    text_dist = self.label_distance + h/2
+                else:
+                    text_dist = self.label_distance + 3*h/2
+            else:
+                line_dist = self.label_distance - h/2
+                arrow_dist = self.label_distance
+                if fits:
+                    text_dist = self.label_distance + h/2
+                else:
+                    text_dist = self.label_distance - h/2
+            cr.move_to(self.p1.x, self.p1.y)
+            cr.line_to(self.p1.x + line_dist, self.p1.y)
+            cr.stroke()
+            cr.move_to(self.p2.x, self.p2.y)
+            # Note: the p1 here is not a bug.
+            cr.line_to(self.p1.x + line_dist, self.p2.y)
+            cr.stroke()
+            vert_arrow(cr,
+                       self.p1.x + arrow_dist,
+                       self.p1.y,
+                       (self.p1.y + self.p2.y) / 2 - w/2 - text_padding,
+                       True, False, 2)
+            vert_arrow(cr,
+                       self.p1.x + arrow_dist,
+                       (self.p1.y + self.p2.y) / 2 + w/2 + text_padding,
+                       self.p2.y,
+                       False, True, 2)
+            cr.move_to(self.p1.x + text_dist,
+                       (self.p1.y + self.p2.y) / 2)
+            cr.save()
+            cr.rotate(math.pi/2)
+            cr.move_to((self.p1.y + self.p2.y) / 2 - w/2,
+                       -(self.p1.x + text_dist - h))
+            cr.show_text(label)
+            cr.restore()
+            cr.stroke()
+
 
     def dist(self, p):
         if self.horiz:
-            return point_dist(
-                p,
-                (self.p1.x,
-                 self.p1.y + self.label_distance)
-            )
+            return line_dist(
+                self.p1.x, self.p1.y + self.label_distance,
+                self.p2.x, self.p1.y + self.label_distance,
+                p[0], p[1])
         else:
-            return point_dist(
-                p,
-                (self.p1.x + self.label_distance,
-                 self.p2.y)
-            )
+            return line_dist(
+                self.p1.x + self.label_distance, self.p1.y,
+                self.p1.x + self.label_distance, self.p2.y,
+                p[0], p[1])
+        # TODO: decide if the following (or some variant) would be better.
+        # if self.horiz:
+        #     return point_dist(
+        #         p,
+        #         ((self.p1.x + self.p2.x) / 2,
+        #          self.p1.y + self.label_distance)
+        #     )
+        # else:
+        #     return point_dist(
+        #         p,
+        #         (self.p1.x + self.label_distance,
+        #          (self.p1.y + self.p2.y) / 2)
+        #     )
 
     def drag(self, offs_x, offs_y):
         if self.horiz:
@@ -1143,28 +1227,49 @@ class MeasuredDistance(TwoPointConstraint):
         else:
             cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(0.3)
-        cr.move_to(self.p1.x, self.p1.y)
+
+        w = 10
+        h = 10
         if self.horiz:
-            cr.line_to(self.p1.x, self.p1.y + self.label_distance)
-        else:
-            cr.line_to(self.p1.x + self.label_distance, self.p1.y)
-        cr.stroke()
-        cr.move_to(self.p2.x, self.p2.y)
-        if self.horiz:
+            if self.label_distance >= 0:
+                line_dist = self.label_distance + h/2
+                arrow_dist = self.label_distance
+            else:
+                line_dist = self.label_distance - h/2
+                arrow_dist = self.label_distance
+            cr.move_to(self.p1.x, self.p1.y)
+            cr.line_to(self.p1.x, self.p1.y + line_dist)
+            cr.stroke()
+            cr.move_to(self.p2.x, self.p2.y)
             # Note: the p1 here is not a bug.
-            cr.line_to(self.p2.x, self.p1.y + self.label_distance)
-        else:
-            cr.line_to(self.p1.x + self.label_distance, self.p2.y)
-        cr.stroke()
-        if self.horiz:
-            cr.move_to(self.p1.x, self.p1.y + self.label_distance)
-            cr.line_to(self.p2.x, self.p1.y + self.label_distance)
+            cr.line_to(self.p2.x, self.p1.y + line_dist)
+            cr.stroke()
+            horiz_arrow(cr,
+                        self.p1.x,
+                        self.p2.x,
+                        self.p1.y + arrow_dist,
+                        True, True, 2)
             cr.stroke()
         else:
-            cr.move_to(self.p1.x + self.label_distance, self.p2.y)
-            cr.line_to(self.p1.x + self.label_distance, self.p1.y)
+            if self.label_distance >= 0:
+                line_dist = self.label_distance + w/2
+                arrow_dist = self.label_distance
+            else:
+                line_dist = self.label_distance - w/2
+                arrow_dist = self.label_distance
+            cr.move_to(self.p1.x, self.p1.y)
+            cr.line_to(self.p1.x + line_dist, self.p1.y)
             cr.stroke()
-        # TODO: arrowheads
+            cr.move_to(self.p2.x, self.p2.y)
+            # Note: the p1 here is not a bug.
+            cr.line_to(self.p1.x + line_dist, self.p2.y)
+            cr.stroke()
+            vert_arrow(cr,
+                       self.p1.x + arrow_dist,
+                       self.p1.y,
+                       self.p2.y,
+                       True, True, 2)
+            cr.stroke()
 
     @property
     def x(self):

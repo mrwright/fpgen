@@ -198,3 +198,49 @@ def do_configuration(primitive):
             ret = do_configuration(parent)
         break
     return ret
+
+def horiz_arrow(cr, x1, x2, y, l_arrowhead=False, r_arrowhead=True,
+                thickness=2):
+    if x1 < x2:
+        mult = 1
+    else:
+        mult = -1
+
+    cr.move_to(x1, y)
+    cr.line_to(x2, y)
+
+    if r_arrowhead:
+        cr.move_to(x2, y)
+        cr.line_to(x2 - mult * thickness, y + thickness)
+        cr.move_to(x2, y)
+        cr.line_to(x2 - mult * thickness, y - thickness)
+    if l_arrowhead:
+        cr.move_to(x1, y)
+        cr.line_to(x1 + mult * thickness, y + thickness)
+        cr.move_to(x1, y)
+        cr.line_to(x1 + mult * thickness, y - thickness)
+
+    cr.stroke()
+
+def vert_arrow(cr, x, y1, y2, t_arrowhead=False, b_arrowhead=True,
+               thickness=2):
+    if y1 < y2:
+        mult = 1
+    else:
+        mult = -1
+
+    cr.move_to(x, y1)
+    cr.line_to(x, y2)
+
+    if b_arrowhead:
+        cr.move_to(x, y2)
+        cr.line_to(x + thickness, y2 - mult * thickness)
+        cr.move_to(x, y2)
+        cr.line_to(x - thickness, y2 - mult * thickness)
+    if t_arrowhead:
+        cr.move_to(x, y1)
+        cr.line_to(x + thickness, y1 + mult * thickness)
+        cr.move_to(x, y1)
+        cr.line_to(x - thickness, y1 + mult * thickness)
+
+    cr.stroke()
