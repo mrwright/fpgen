@@ -5,8 +5,6 @@
 
 from collections import defaultdict
 from copy import deepcopy
-from numpy import array, dot
-from numpy.linalg import inv
 
 from exceptiontypes import OverconstrainedException
 from primitives import PRIMITIVE_TYPES
@@ -245,7 +243,6 @@ class ObjectManager(object):
     def set_point_coords(self, point, x, y):
         self._lru_update(point)
         self._point_coords[point] = (x, y)
-        self._update_point(point, x, y)
 
     def point_x(self, point):
         return self._point_coords[point][0]
@@ -256,15 +253,19 @@ class ObjectManager(object):
     def point_coords(self, point):
         return (self.point_x(point), self.point_y(point))
 
-    def eliminate(self, current, new, mins):
+    @classmethod
+    def eliminate(cls, current, new, mins, inv, target_pt, target_val):
         '''
         Gaussian elimination.
 
         current: list of maps from column indices to coefficients.
         new: a constraint to be added.
         mins: dictionary of index->row index.
+        inv: same as current; will end up with the inverse of the matrix.
         '''
         remaining = list(new)
+        new_inv = defaultdict(int)
+        new_inv[target_pt] = target_val
         while remaining:
             # TODO: this could be done a lot better.
             x = remaining.pop()
@@ -275,8 +276,13 @@ class ObjectManager(object):
                     new[y] -= v * factor
                     if new[y]:
                         remaining.append(y)
+                for y, v in inv[i].iteritems():
+                    if y not in new_inv:
+                        new_inv[y] = 0
+                    new_inv[y] -= v * factor
+
         for x in list(new):
-            if new[x] == 0:
+            if round(new[x], 4) == 0:
                 del new[x]
 
         try:
@@ -289,111 +295,111 @@ class ObjectManager(object):
         v = new[j]
         for x in new:
             new[x] /= float(v)
+        for x in new_inv:
+            new_inv[x] /= float(v)
+
+        for x in list(new_inv):
+            if new_inv[x] == 0:
+                del new_inv[x]
 
         assert new[j] == 1
 
-        for row in current:
+        count = 0
+        for idx, row in enumerate(current):
             if j in row:
+                count += 1
+                inv_row = inv[idx]
                 factor = row[j]
                 for y, v in new.iteritems():
+                    if y not in row:
+                        row[y] = 0
                     row[y] -= v * factor
+                for y, v in new_inv.iteritems():
+                    inv_row[y] -= v * factor
                 assert row[j] == 0
                 for i in list(row):
-                    if row[i] == 0:
+                    if round(row[i], 4) == 0:
                         del row[i]
+                for i in list(inv_row):
+                    if inv_row[i] == 0:
+                        del inv_row[i]
 
         mins[j] = len(current)
         current.append(new)
+        inv.append(new_inv)
 
         return True
 
-    def build_matrix(self, constraints, point_to_matrix):
+    def build_matrix(self, constraints):
         n = len(self._all_points)
         targets = []
-        matrix = []
+        inv = []
 
         current_dictmat = []
         current_mins = {}
 
-        # TODO: don't bother building the matrix. We can invert it ourselves,
-        # and the matrix multiplication will probably be faster when it's
-        # represented sparsely.
         for (coeffs, target) in constraints:
-            row = [0] * 2 * n
             rowdict = defaultdict(int)
             for (pt, coeffx, coeffy) in coeffs:
-                row[2 * point_to_matrix[pt]] += coeffx
-                rowdict[2 * point_to_matrix[pt]] += coeffx
-                row[2 * point_to_matrix[pt] + 1] += coeffy
-                rowdict[2 * point_to_matrix[pt] + 1] += coeffy
-            result = self.eliminate(current_dictmat, rowdict, current_mins)
+                rowdict[2 * pt] += coeffx
+                rowdict[2 * pt + 1] += coeffy
+            result = self.eliminate(current_dictmat, rowdict, current_mins, inv,
+                                    None, target)
             if not result:
                 return False
-            matrix.append(row)
-            targets.append(target)
         # We now have a matrix with all explicit constraints.
-        print "Degrees of freedom: %d" % (2 * n - len(matrix))
-        self.degrees_of_freedom = (2 * n - len(matrix))
+        print "Degrees of freedom: %d" % (2 * n - len(current_dictmat))
+        self.degrees_of_freedom = (2 * n - len(current_dictmat))
 
         self._target_map_x = {}
         self._target_map_y = {}
         for pt in self._point_lru:
-            coords = self._point_coords[pt]
-            row1 = [0] * 2 * n
             row1dict = defaultdict(int)
-            row2 = [0] * 2 * n
             row2dict = defaultdict(int)
-            row1[2 * point_to_matrix[pt]] = 1
-            row1dict[2 * point_to_matrix[pt]] = 1
-            row2[2 * point_to_matrix[pt] + 1] = 1
-            row2dict[2 * point_to_matrix[pt] + 1] = 1
+            row1dict[2 * pt] = 1
+            row2dict[2 * pt + 1] = 1
 
-            if self.eliminate(current_dictmat, row1dict, current_mins):
+            if self.eliminate(current_dictmat, row1dict, current_mins, inv,
+                              2 * pt, 1):
                 self._target_map_x[pt] = len(targets)
-                targets.append(coords[0])
-                matrix.append(row1)
 
-            if self.eliminate(current_dictmat, row2dict, current_mins):
+            if self.eliminate(current_dictmat, row2dict, current_mins, inv,
+                              2 * pt + 1, 1):
                 self._target_map_y[pt] = len(targets)
-                targets.append(coords[1])
-                matrix.append(row2)
 
-            if len(matrix) == 2 * n:
+            if len(current_dictmat) == 2 * n:
                 break
 
-        return (array(matrix), array(targets))
+        new_inv = {}
+        for pt_idx, row_idx in current_mins.iteritems():
+            new_inv[pt_idx] = inv[row_idx]
+
+        return new_inv
+
+    def _coord(self, pt_ind):
+        return self.point_coords(pt_ind/2)[pt_ind%2]
+
+    def _pt_val(self, pt_ind):
+        pt_row = self._cached_matrix[pt_ind]
+        pt_val = sum(self._coord(target_ind) * float(target_coeff)
+                     for target_ind, target_coeff in pt_row.iteritems()
+                     if target_ind is not None)
+        pt_val += pt_row[None]
+        return float(pt_val)
+
+    def update_all_point_coords(self):
+        for point in self._all_points:
+            self._point_coords[point] = (self._pt_val(point * 2),
+                                         self._pt_val(point * 2 + 1))
 
     def update_points(self):
         constraints = []
         for p in self.constraining_primitives:
             constraints = constraints + p.constraints()
 
-        point_to_matrix = {}
-        idx = 0
-        for point in self._all_points:
-            point_to_matrix[point] = idx
-            idx += 1
-        assert idx == len(self._all_points)
-        result = self.build_matrix(constraints, point_to_matrix)
-        if not result:
+        m = self.build_matrix(constraints)
+        if not m:
             raise OverconstrainedException
-        m, t = result
-        self._cached_matrix = inv(m)
-        self._cached_target = t
-        self._cached_point_to_matrix = point_to_matrix
-        sol = dot(self._cached_matrix, t)
-        sol = zip(sol[::2], sol[1::2])
-        for point, mat_point in point_to_matrix.iteritems():
-            self._point_coords[point] = sol[mat_point]
+        self._cached_matrix = m
+        self.update_all_point_coords()
         return True
-
-    def _update_point(self, p, x, y):
-        if p in self._target_map_x:
-            self._cached_target[self._target_map_x[p]] = x
-        if p in self._target_map_y:
-            self._cached_target[self._target_map_y[p]] = y
-
-        sol = dot(self._cached_matrix, self._cached_target)
-        sol = zip(sol[::2], sol[1::2])
-        for point, mat_point in self._cached_point_to_matrix.iteritems():
-            self._point_coords[point] = sol[mat_point]

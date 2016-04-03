@@ -313,7 +313,9 @@ class FPArea(gtk.DrawingArea):
             self.scale_y += (self.y - orig_y)
             self.x, self.y = self.coord_map(x, y)
         if self.dragging_object is not None:
-            self.dragging_object.drag(self.x - orig_x, self.y - orig_y)
+            result = self.dragging_object.drag(self.x - orig_x, self.y - orig_y)
+            if result:
+                self.object_manager.update_all_point_coords()
         if self.active_x is not None and (
                 self.dragging or self.dragging_object is not None):
             self.active_x += (self.x - orig_x)
