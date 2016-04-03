@@ -1620,7 +1620,7 @@ class Coincident(TwoPointConstraint):
 
 class DrawnLine(Primitive):
     NAME = "Line"
-    ZORDER = 1
+    ZORDER = 4
     HORIZONTAL = False
     VERTICAL = False
 
