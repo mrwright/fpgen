@@ -1769,7 +1769,7 @@ class DrawnLine(Primitive):
 
     @property
     def thickness(self):
-        return self._p1points[2].y - self._p1points[0].y
+        return self._p1points[4].y - self._p1points[0].y
 
     def dist(self, p):
         res = line_dist(self.x1, self.y1, self.x2, self.y2, p[0], p[1])
@@ -1801,7 +1801,7 @@ class DrawnLine(Primitive):
             constraints.extend(
                 constrain_horiz(self._centerpoints) +
                 equal_space_horiz(self._centerpoints) +
-                constrain_vert([self._p1points[0],
+                constrain_vert([self._p1points[1],
                                 self._centerpoints[0]]) +
                 constrain_vert([self._p1points[2],
                                  self._centerpoints[1],
@@ -1811,6 +1811,7 @@ class DrawnLine(Primitive):
                                    self._p2points[2]])
             )
 
+        # Equal radius
         constraints.append(
             ([(self._p1points[0].point(), 0, 1),
               (self._p1points[2].point(), 0, -1),
@@ -1836,13 +1837,13 @@ class DrawnLine(Primitive):
         else:
             cr.set_source_rgb(0, 1, 0)
 
-        cr.set_line_width(self.thickness * 2)
+        cr.set_line_width(self.thickness)
         cr.move_to(self.x1, self.y1)
         cr.line_to(self.x2, self.y2)
         cr.stroke()
-        cr.arc(self.x1, self.y1, self.thickness, 0, 2 * math.pi)
+        cr.arc(self.x1, self.y1, self.thickness / 2, 0, 2 * math.pi)
         cr.fill()
-        cr.arc(self.x2, self.y2, self.thickness, 0, 2 * math.pi)
+        cr.arc(self.x2, self.y2, self.thickness / 2, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
 

@@ -1,5 +1,6 @@
 from primitives import (
     Ball,
+    DrawnLine,
     Pad,
     Pin,
 )
@@ -55,6 +56,11 @@ class GedaOut(object):
             pin.number() if pin.number() is not None else ''
         )
 
+    @staticmethod
+    def write_line(line):
+        print """ElementLine [{:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil {:.6f}mil ]""".format(
+            line.x1, line.y1, line.x2, line.y2, line.thickness
+            )
 
     @staticmethod
     def write(object_manager):
@@ -66,6 +72,7 @@ class GedaOut(object):
             (Ball, GedaOut.write_ball),
             (Pad, GedaOut.write_pad),
             (Pin, GedaOut.write_pin),
+            (DrawnLine, GedaOut.write_line),
         ]
         for primitive in primitive_list:
             for ty, func in functab:
