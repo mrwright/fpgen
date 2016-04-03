@@ -1746,7 +1746,10 @@ class DrawnLine(Primitive):
         return not objects
 
     def children(self):
-        return self._p1points + self._p2points + self._centerpoints
+        if self._centerpoints:
+            return self._p1points + self._p2points + self._centerpoints
+        else:
+            return self._p1points + self._p2points
 
     @property
     def x1(self):
@@ -1860,12 +1863,15 @@ class DrawnLine(Primitive):
             self._object_manager.primitive_idx(point)
             for point in self._centerpoints
         ] if self._centerpoints else None
+        deps = p1_indices + p2_indices
+        if center_indices:
+            deps += center_indices
         return dict(
             p1points=p1_indices,
             p2points=p2_indices,
             centerpoints=center_indices,
             thickness=self._thickness.to_dict() if self._thickness else None,
-            deps=p1_indices+p2_indices+center_indices,
+            deps=deps,
         )
 
     @classmethod
