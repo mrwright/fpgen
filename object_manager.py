@@ -33,12 +33,14 @@ class ObjectManager(object):
         # Caches of various internal things I should really document
         # at some point.
         self._cached_matrix = None
-        # All primitives we have.
+        # All primitives we have. TODO: make these sets
         self.primitives = []
         # All primitives that should be drawn on the screen.
         self.draw_primitives = []
         # All primitives whose constraints we should consider.
         self.constraining_primitives = []
+        # All suppressed primitives
+        self.suppressed_primitives = set()
         # Map from each primitive to its parent.
         self.parent_map = {}
         self.degrees_of_freedom = 0
@@ -65,7 +67,10 @@ class ObjectManager(object):
                              for primitive in self.draw_primitives],
             constraining_primitives=[self.primitive_idx(primitive)
                                      for primitive
-                                       in self.constraining_primitives]
+                                       in self.constraining_primitives],
+            suppressed_primitives=[self.primitive_idx(primitive)
+                                   for primitive
+                                   in self.suppressed_primitives],
         )
 
     @staticmethod
@@ -109,6 +114,10 @@ class ObjectManager(object):
             object_manager.primitives[idx]
             for idx in dictionary['constraining_primitives']
         ]
+        object_manager.suppressed_primitives = set(
+            object_manager.primitives[idx]
+            for idx in dictionary['suppressed_primitives']
+        )
         object_manager.update_points()
         object_manager.update_parent_map()
 
@@ -246,6 +255,15 @@ class ObjectManager(object):
 
     def point_coords(self, point):
         return (self.point_x(point), self.point_y(point))
+
+    def toggle_suppressed(self, primitive):
+        if primitive in self.suppressed_primitives:
+            self.suppressed_primitives.remove(primitive)
+        else:
+            self.suppressed_primitives.add(primitive)
+
+    def is_suppressed(self, primitive):
+        return primitive in self.suppressed_primitives
 
     @classmethod
     def eliminate(cls, current, new, mins, inv, target_pt, target_val):

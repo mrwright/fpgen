@@ -244,3 +244,10 @@ def vert_arrow(cr, x, y1, y2, t_arrowhead=False, b_arrowhead=True,
         cr.line_to(x - thickness, y1 + mult * thickness)
 
     cr.stroke()
+
+def set_dampened_color(cr, r, g, b, dampening):
+    cr.set_source_rgb(
+        r * (1 - dampening) + dampening,
+        g * (1 - dampening) + dampening,
+        b * (1 - dampening) + dampening,
+    )

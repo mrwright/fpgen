@@ -155,6 +155,16 @@ class FPArea(gtk.DrawingArea):
                 self.recalculate()
                 if res:
                     self.snapshot()
+        elif keyname == 'Tab':
+            obj = self.active_object
+            if obj:
+                while obj:
+                    if obj.exportable():
+                        self.object_manager.toggle_suppressed(obj)
+                        self.snapshot()
+                        break
+                    else:
+                        obj = obj.parent()
         else:
             cls = primitive_table.get(keyname)
             if cls:

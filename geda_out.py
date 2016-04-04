@@ -16,7 +16,9 @@ class GedaOut(object):
             ball.r*2, # Thickness
             clearance, # Clearance
             ball.r*2 + mask, # Mask
-            0, 0)
+            ball.number() if ball.number() is not None else '',
+            ball.number() if ball.number() is not None else '',
+        )
 
     @staticmethod
     def write_pad(pad):
@@ -75,7 +77,8 @@ class GedaOut(object):
             (DrawnLine, GedaOut.write_line),
         ]
         for primitive in primitive_list:
-            for ty, func in functab:
-                if isinstance(primitive, ty):
-                    func(primitive)
+            if not primitive.is_suppressed():
+                for ty, func in functab:
+                    if isinstance(primitive, ty):
+                        func(primitive)
         print ")"

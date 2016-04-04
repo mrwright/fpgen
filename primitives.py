@@ -28,6 +28,7 @@ from ui_utils import (
     configuration_widget_items,
     horiz_arrow,
     reconfigure,
+    set_dampened_color,
     vert_arrow,
 )
 from units import UnitNumber
@@ -193,6 +194,13 @@ class Primitive(object):
                 return type_id
         raise ValueError()
 
+    @classmethod
+    def exportable(cls):
+        return False
+
+    def is_suppressed(self):
+        return self._object_manager.is_suppressed(self)
+
 class Point(Primitive):
     '''
     This class wraps the ObjectManager's points.
@@ -308,6 +316,10 @@ class TileablePrimitive(Primitive):
 
     def center_point(self):
         return None
+
+    @classmethod
+    def exportable(cls):
+        return True
 
 class Pad(TileablePrimitive):
     NAME = "Pad"
@@ -477,13 +489,14 @@ class Pad(TileablePrimitive):
         return ([], [])
 
     def draw(self, cr, active, selected):
+        color_mult = 0.5 if self.is_suppressed() else 0
         cr.save()
         if selected:
-            cr.set_source_rgb(0, 0, 0.7)
+            set_dampened_color(cr, 0, 0, 0.7, color_mult)
         elif active:
-            cr.set_source_rgb(0.7, 0, 0)
+            set_dampened_color(cr, 0.7, 0, 0, color_mult)
         else:
-            cr.set_source_rgb(0.7, 0.7, 0.7)
+            set_dampened_color(cr, 0.7, 0.7, 0.7, color_mult)
         cr.rectangle(self.x0, self.y0, self.w, self.h)
         cr.fill()
         cr.restore()
@@ -492,6 +505,7 @@ class Pad(TileablePrimitive):
             extents = cr.text_extents(self.number())
             w, h = extents[2:4]
             cr.move_to(self.x0 + self.w/2 - w / 2, self.y0 + self.h/2  + h / 2)
+            set_dampened_color(cr, 0, 0, 0, color_mult)
             cr.show_text(self.number())
             cr.stroke()
         cr.restore()
@@ -671,18 +685,19 @@ class Pin(TileablePrimitive):
             return ([], [self._center_point.point()])
 
     def draw(self, cr, active, selected):
+        color_mult = 0.5 if self.is_suppressed() else 0
         cr.save()
         if selected:
-            cr.set_source_rgb(0, 0, 0.7)
+            set_dampened_color(cr, 0, 0, 0.7, color_mult)
         elif active:
-            cr.set_source_rgb(0.7, 0, 0)
+            set_dampened_color(cr, 0.7, 0, 0, color_mult)
         else:
-            cr.set_source_rgb(0.7, 0.7, 0.7)
+            set_dampened_color(cr, 0.7, 0.7, 0.7, color_mult)
         cr.arc(self.x, self.y, self.ring_r, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
         cr.save()
-        cr.set_source_rgb(.9, .9, .9)
+        set_dampened_color(cr, .9, .9, .9, color_mult)
         cr.arc(self.x, self.y, self.hole_r, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
@@ -690,6 +705,7 @@ class Pin(TileablePrimitive):
             extents = cr.text_extents(self.number())
             w, h = extents[2:4]
             cr.move_to(self.x - w / 2, self.y + h / 2)
+            set_dampened_color(cr, 0, 0, 0, color_mult)
             cr.show_text(self.number())
             cr.stroke()
 
@@ -851,13 +867,14 @@ class Ball(TileablePrimitive):
             return ([], [self.p(2)])
 
     def draw(self, cr, active, selected):
+        color_mult = 0.5 if self.is_suppressed() else 0
         cr.save()
         if selected:
-            cr.set_source_rgb(0, 0, 0.7)
+            set_dampened_color(cr, 0, 0, 0.7, color_mult)
         elif active:
-            cr.set_source_rgb(0.7, 0, 0)
+            set_dampened_color(cr, 0.7, 0, 0, color_mult)
         else:
-            cr.set_source_rgb(0.7, 0.7, 0.7)
+            set_dampened_color(cr, 0.7, 0.7, 0.7, color_mult)
         cr.arc(self.x, self.y, self.r, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
@@ -865,6 +882,7 @@ class Ball(TileablePrimitive):
             extents = cr.text_extents(self.number())
             w, h = extents[2:4]
             cr.move_to(self.x - w / 2, self.y + h / 2)
+            set_dampened_color(cr, 0, 0, 0, color_mult)
             cr.show_text(self.number())
             cr.stroke()
 
@@ -1772,6 +1790,10 @@ class DrawnLine(Primitive):
         )
 
     @classmethod
+    def exportable(cls):
+        return True
+
+    @classmethod
     def configure(cls, objects):
         dialog = gtk.Dialog("Enter dimensions")
         widget, entry_widgets = configuration_widget(
@@ -1930,14 +1952,15 @@ class DrawnLine(Primitive):
             return ([], [self._p1points[2].point(), self._p2points[2].point()])
 
     def draw(self, cr, active, selected):
+        color_mult = 0.5 if self.is_suppressed() else 0
         cr.save()
         if active:
-            cr.set_source_rgb(1, 0, 0)
+            set_dampened_color(cr, 1, 0, 0, color_mult)
         elif selected:
             # TODO: if both are the case.
-            cr.set_source_rgb(0.4, 0.4, 1)
+            set_dampened_color(cr, 0.4, 0.4, 1, color_mult)
         else:
-            cr.set_source_rgb(0, 1, 0)
+            set_dampened_color(cr, 0, 1, 0, color_mult)
 
         cr.set_line_width(self.thickness)
         cr.move_to(self.x1, self.y1)
@@ -2181,6 +2204,10 @@ class Array(Primitive):
             cls(object_manager, elements, nx, ny, centerpoint),
             check_overconstraints=False,
         )
+
+    @classmethod
+    def exportable(cls):
+        return True
 
     @classmethod
     def can_create(cls, objects):
