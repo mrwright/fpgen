@@ -80,6 +80,16 @@ class Primitive(object):
         '''
         return []
 
+    def secondary_constraints(self):
+        return []
+
+    def drag_constraints(self, child):
+        parent = self.parent()
+        if parent:
+            return parent.drag_constraints(self)
+        else:
+            return ([], [])
+
     def children(self):
         '''
         All primitives that are considered "children" of this one; that is,
@@ -349,6 +359,9 @@ class Pad(TileablePrimitive):
         (self._number,
          self._clearance,
          self._mask) = reconfigure(other_widgets)
+        # TODO: should we distinguish between "empty string" and "unset"?
+        if self._number == '':
+            self._number = None
 
     @classmethod
     def placeable(cls):
@@ -430,6 +443,38 @@ class Pad(TileablePrimitive):
         )
 
         return constraints
+
+    def secondary_constraints(self):
+        return [
+            ([(self.p(0, 2),  0,  1),
+              (self.p(0, 0),  0, -1)], self.h),
+            ([(self.p(2, 0),  1,  0),
+              (self.p(0, 0), -1,  0)], self.w),
+        ]
+
+    def drag_constraints(self, child):
+        if not child:
+            return (self.secondary_constraints(), [])
+        # TODO: better way to do this.
+        for i in xrange(3):
+            for j in xrange(3):
+                if child.point() == self.p(i, j):
+                    if i == 1 or j == 1:
+                        constraints = []
+                        if i == 1:
+                            constraints.append(
+                                ([(self.p(2, 0),  1,  0),
+                                  (self.p(0, 0), -1,  0)], self.w)
+                            )
+                        if j == 1:
+                            constraints.append(
+                                ([(self.p(0, 2),  0,  1),
+                                  (self.p(0, 0),  0, -1)], self.h)
+                            )
+                        return (constraints, [self.p(2-i, 2-j)])
+                    else:
+                        return ([], [self.p(2-i, 2-j)])
+        return ([], [])
 
     def draw(self, cr, active, selected):
         cr.save()
@@ -547,6 +592,9 @@ class Pin(TileablePrimitive):
         (self._number,
          self._clearance,
          self._mask) = reconfigure(other_widgets)
+        # TODO: should we distinguish between "empty string" and "unset"?
+        if self._number == '':
+            self._number = None
 
     @classmethod
     def placeable(cls):
@@ -604,6 +652,23 @@ class Pin(TileablePrimitive):
                        + self._hole_points[2:])
 
         return constrain_ball(ring_points) + constrain_ball(hole_points)
+
+    def secondary_constraints(self):
+        return [
+            ([(self.rp(2),  1, 0),
+              (self.hp(2), -1, 0)], self.ring_r - self.hole_r),
+            ([(self.hp(2),  1, 0),
+              (self._center_point.point(), -1, 0)], self.hole_r),
+        ]
+
+    def drag_constraints(self, child):
+        if not child:
+            return (self.secondary_constraints(), [])
+
+        if child == self._center_point:
+            return (self.secondary_constraints(), [])
+        else:
+            return ([], [self._center_point.point()])
 
     def draw(self, cr, active, selected):
         cr.save()
@@ -729,6 +794,9 @@ class Ball(TileablePrimitive):
         (self._number,
          self._clearance,
          self._mask) = reconfigure(other_widgets)
+        # TODO: should we distinguish between "empty string" and "unset"?
+        if self._number == '':
+            self._number = None
 
     @classmethod
     def placeable(cls):
@@ -769,6 +837,18 @@ class Ball(TileablePrimitive):
 
     def constraints(self):
         return constrain_ball(self.points)
+
+    def secondary_constraints(self):
+        return [
+            ([(self.p(2),  0,  1),
+              (self.p(0),  0, -1)], self.r),
+        ]
+
+    def drag_constraints(self, child):
+        if child == self.points[2]:
+            return (self.secondary_constraints(), [])
+        else:
+            return ([], [self.p(2)])
 
     def draw(self, cr, active, selected):
         cr.save()
@@ -1827,6 +1907,28 @@ class DrawnLine(Primitive):
 
         return constraints
 
+    def secondary_constraints(self):
+        return [
+            ([(self._p1points[4].point(), 0,  1),
+              (self._p1points[0].point(), 0, -1)], self.thickness),
+            ([(self._p1points[2].point(),  1,  0),
+              (self._p2points[2].point(), -1,  0)], self.x2 - self.x1),
+            ([(self._p1points[2].point(),  0,  1),
+              (self._p2points[2].point(),  0, -1)], self.y2 - self.y1),
+        ]
+
+    def drag_constraints(self, child):
+        if child == self._p1points[2] or child == self._p2points[2]:
+            return (
+                [([(self._p1points[4].point(), 0,  1),
+                   (self._p1points[0].point(), 0, -1)],
+                  self.thickness)],
+                [self._p1points[2].point() if child == self._p2points[2] else
+                 self._p2points[2].point()]
+            )
+        else:
+            return ([], [self._p1points[2].point(), self._p2points[2].point()])
+
     def draw(self, cr, active, selected):
         cr.save()
         if active:
@@ -2301,6 +2403,24 @@ class Array(Primitive):
                 )
 
         return all_constraints
+
+    def secondary_constraints(self):
+        all_constraints = []
+        for child in self.children():
+            all_constraints.extend(child.secondary_constraints())
+        all_constraints.extend([
+            ([(self.p(0, 0).center_point().point(), 0,  1),
+              (self.p(0, 1).center_point().point(), 0, -1)],
+             self.p(0, 0).center_point().y - self.p(0, 1).center_point().y),
+            ([(self.p(0, 0).center_point().point(),  1, 0),
+              (self.p(1, 0).center_point().point(), -1, 0)],
+             self.p(0, 0).center_point().x - self.p(1, 0).center_point().x),
+        ])
+        return all_constraints
+
+    def drag_constraints(self, child):
+        # TODO: better constraints here.
+        return ([], [])
 
     def dist(self, p):
         return None

@@ -7,7 +7,7 @@ from collections import defaultdict
 from copy import deepcopy
 
 from exceptiontypes import OverconstrainedException
-from primitives import PRIMITIVE_TYPES
+from primitives import PRIMITIVE_TYPES, Point
 from units import UnitNumber
 
 class ObjectManager(object):
@@ -33,10 +33,6 @@ class ObjectManager(object):
         # Caches of various internal things I should really document
         # at some point.
         self._cached_matrix = None
-        self._cached_target = None
-        self._cached_point_to_matrix = None
-        self._target_map_x = {}
-        self._target_map_y = {}
         # All primitives we have.
         self.primitives = []
         # All primitives that should be drawn on the screen.
@@ -221,7 +217,6 @@ class ObjectManager(object):
         self._all_points.add(old)
         self._point_lru.append(old)
         self._cached_matrix = None
-        self._cached_target = None
         self._point_coords[old] = (x, y)
 
         return old
@@ -231,7 +226,6 @@ class ObjectManager(object):
         self._point_lru.remove(point_idx)
         del self._point_coords[point_idx]
         self._cached_matrix = None
-        self._cached_target = None
 
     def _lru_update(self, p):
         for i in range(len(self._point_lru)):
@@ -330,7 +324,26 @@ class ObjectManager(object):
 
         return True
 
-    def build_matrix(self, constraints):
+    def build_matrix(self, constraints, secondary_constraints, points,
+                     dragging_point):
+        def constrain_point(pt, current_dictmat, current_mins, inv):
+            row1dict = defaultdict(int)
+            row2dict = defaultdict(int)
+            row1dict[2 * pt] = 1
+            row2dict[2 * pt + 1] = 1
+
+            self.eliminate(current_dictmat, row1dict, current_mins, inv,
+                           2 * pt, 1)
+            self.eliminate(current_dictmat, row2dict, current_mins, inv,
+                           2 * pt + 1, 1)
+
+        def constraint_to_row(coeffs, target):
+            rowdict = defaultdict(int)
+            for (pt, coeffx, coeffy) in coeffs:
+                rowdict[2 * pt] += coeffx
+                rowdict[2 * pt + 1] += coeffy
+            return rowdict
+
         n = len(self._all_points)
         targets = []
         inv = []
@@ -339,10 +352,7 @@ class ObjectManager(object):
         current_mins = {}
 
         for (coeffs, target) in constraints:
-            rowdict = defaultdict(int)
-            for (pt, coeffx, coeffy) in coeffs:
-                rowdict[2 * pt] += coeffx
-                rowdict[2 * pt + 1] += coeffy
+            rowdict = constraint_to_row(coeffs, target)
             result = self.eliminate(current_dictmat, rowdict, current_mins, inv,
                                     None, target)
             if not result:
@@ -351,21 +361,16 @@ class ObjectManager(object):
         print "Degrees of freedom: %d" % (2 * n - len(current_dictmat))
         self.degrees_of_freedom = (2 * n - len(current_dictmat))
 
-        self._target_map_x = {}
-        self._target_map_y = {}
-        for pt in self._point_lru:
-            row1dict = defaultdict(int)
-            row2dict = defaultdict(int)
-            row1dict[2 * pt] = 1
-            row2dict[2 * pt + 1] = 1
+        if dragging_point is not None:
+            constrain_point(dragging_point, current_dictmat, current_mins, inv)
 
-            if self.eliminate(current_dictmat, row1dict, current_mins, inv,
-                              2 * pt, 1):
-                self._target_map_x[pt] = len(targets)
+        for (coeffs, target) in secondary_constraints:
+            rowdict = constraint_to_row(coeffs, target)
+            self.eliminate(current_dictmat, rowdict, current_mins, inv,
+                           None, target)
 
-            if self.eliminate(current_dictmat, row2dict, current_mins, inv,
-                              2 * pt + 1, 1):
-                self._target_map_y[pt] = len(targets)
+        for pt in points + self._point_lru:
+            constrain_point(pt, current_dictmat, current_mins, inv)
 
             if len(current_dictmat) == 2 * n:
                 break
@@ -392,12 +397,28 @@ class ObjectManager(object):
             self._point_coords[point] = (self._pt_val(point * 2),
                                          self._pt_val(point * 2 + 1))
 
-    def update_points(self):
+    def update_points(self, dragging_object=None):
         constraints = []
-        for p in self.constraining_primitives:
-            constraints = constraints + p.constraints()
+        secondary_constraints = []
+        if dragging_object:
+            (drag_constraints,
+             points) = dragging_object.drag_constraints(None)
+            secondary_constraints.extend(drag_constraints)
+        else:
+            points = []
+            for p in self.constraining_primitives:
+                secondary_constraints.extend(p.secondary_constraints())
 
-        m = self.build_matrix(constraints)
+        for p in self.constraining_primitives:
+            constraints.extend(p.constraints())
+
+        if isinstance(dragging_object, Point):
+            dragging_point = dragging_object.point()
+        else:
+            dragging_point = None
+
+        m = self.build_matrix(constraints, secondary_constraints, points,
+                              dragging_point)
         if not m:
             raise OverconstrainedException
         self._cached_matrix = m

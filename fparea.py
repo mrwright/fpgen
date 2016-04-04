@@ -97,7 +97,7 @@ class FPArea(gtk.DrawingArea):
         self.queue_draw()
 
     def recalculate(self):
-        self.object_manager.update_points()
+        self.object_manager.update_points(self.dragging_object)
         self.update_closest()
         self.queue_draw()
 
