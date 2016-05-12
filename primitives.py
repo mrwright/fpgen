@@ -2409,7 +2409,7 @@ class Array(Primitive):
                 all_constraints.extend(
                     constrain_vert(
                         [self.p(0, 0).center_point(),
-                         self.centerpoint.point()]
+                         self.centerpoint]
                     )
                 )
 
@@ -2435,14 +2435,18 @@ class Array(Primitive):
         all_constraints = []
         for child in self.children():
             all_constraints.extend(child.secondary_constraints())
-        all_constraints.extend([
-            ([(self.p(0, 0).center_point().point(), 0,  1),
-              (self.p(0, 1).center_point().point(), 0, -1)],
-             self.p(0, 0).center_point().y - self.p(0, 1).center_point().y),
-            ([(self.p(0, 0).center_point().point(),  1, 0),
-              (self.p(1, 0).center_point().point(), -1, 0)],
-             self.p(0, 0).center_point().x - self.p(1, 0).center_point().x),
-        ])
+        if self.ny > 1:
+            all_constraints.append(
+                ([(self.p(0, 0).center_point().point(), 0,  1),
+                  (self.p(0, 1).center_point().point(), 0, -1)],
+                 self.p(0, 0).center_point().y - self.p(0, 1).center_point().y)
+            )
+        if self.nx > 1:
+            all_constraints.append(
+                ([(self.p(0, 0).center_point().point(),  1, 0),
+                  (self.p(1, 0).center_point().point(), -1, 0)],
+                 self.p(0, 0).center_point().x - self.p(1, 0).center_point().x),
+            )
         return all_constraints
 
     def drag_constraints(self, child):
